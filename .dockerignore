@@ -1,0 +1,6 @@
+target/
+.git/
+.gitlab/
+.env
+Dockerfile
+README.md
