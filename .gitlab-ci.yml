@@ -1,0 +1,107 @@
+```yaml
+stages:
+  - checks
+  - test
+  - build
+  - docker
+
+variables:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: "true"
+
+default:
+  image: rust:1.88
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - target/
+    - .cargo/
+    - /usr/local/cargo/registry/
+    - /usr/local/cargo/git/
+
+before_script:
+  - rustup component add rustfmt clippy
+
+# =========================
+# CHECKS
+# =========================
+
+fmt:
+  stage: checks
+  script:
+    - cargo fmt --all -- --check
+
+clippy:
+  stage: checks
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings
+
+sqlx:
+  stage: checks
+  script:
+    - cargo install sqlx-cli --no-default-features --features rustls,postgres
+    - cargo sqlx prepare --check
+
+# =========================
+# TESTS
+# =========================
+
+test:
+  stage: test
+  script:
+    - cargo test --all-features --all-targets
+
+# =========================
+# BUILD
+# =========================
+
+build-release:
+  stage: build
+  script:
+    - cargo build --release
+
+# =========================
+# DOCKER VALIDATION
+# =========================
+
+docker-build:
+  stage: docker
+  image: docker:28
+  services:
+    - docker:28-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - docker build -t app:test .
+  rules:
+    # Ejecutar en MRs y main
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# =========================
+# DOCKER PUSH (ONLY MAIN)
+# =========================
+
+docker-push:
+  stage: docker
+  image: docker:28
+  services:
+    - docker:28-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" |
+      docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+
+    # latest
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      $CI_REGISTRY_IMAGE:latest
+
+    - docker push $CI_REGISTRY_IMAGE:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+```
