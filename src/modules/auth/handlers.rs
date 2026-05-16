@@ -1,11 +1,14 @@
 use super::models::{RegisterRequest, RegisterResponse};
 use super::service;
 use crate::errors::AppError;
+use crate::modules::auth::models::LoginRequest;
 use crate::{AppState, errors::ApiResult};
+use axum::http::{HeaderMap, HeaderValue, header};
+use axum::response::IntoResponse;
 use axum::{Json, extract::State, http::StatusCode};
 use validator::Validate;
 
-// POST /auth/register
+/// POST /auth/register
 #[tracing::instrument(
     skip(state),                    // No logear el estado completo
     fields(email = %payload.email)  // Logear el email
@@ -20,4 +23,33 @@ pub async fn register(
 
     let response = service::register(state.user_repo.as_ref(), payload).await?;
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// POST /auth/login
+///
+/// Autentica al usuario y establece el JWT en una cookie HttpOnly
+#[tracing::instrument(skip(state), fields(email = %payload.email))]
+pub async fn login(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> ApiResult<impl IntoResponse> {
+    payload
+        .validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let (response, token) =
+        service::login(state.user_repo.as_ref(), &state.config, payload).await?;
+
+    let cookie_value = format!(
+        "access_token={}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}",
+        token, state.config.jwt_access_ttl_seconds
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie_value).map_err(|e| AppError::Internal(e.into()))?,
+    );
+
+    Ok((headers, Json(response)))
 }

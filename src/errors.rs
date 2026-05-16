@@ -23,6 +23,9 @@ pub enum AppError {
     #[error("Conflicto: {0}")]
     Conflict(String),
 
+    #[error("Validación fallida: {0}")]
+    Validation(String),
+
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 
@@ -38,6 +41,7 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
+            AppError::Validation(_) => (StatusCode::UNPROCESSABLE_ENTITY, "validation_error"),
             AppError::Database(e) => {
                 tracing::error!("DB error: {:?}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "database_error")
