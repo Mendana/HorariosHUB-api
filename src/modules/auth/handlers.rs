@@ -1,4 +1,5 @@
-use super::models::{RegisterRequest, RegisterResponse};
+use super::middleware::AuthenticatedUser;
+use super::models::{RegisterRequest, RegisterResponse, UserPublic};
 use super::service;
 use crate::errors::AppError;
 use crate::modules::auth::models::LoginRequest;
@@ -23,6 +24,22 @@ pub async fn register(
 
     let response = service::register(state.user_repo.as_ref(), payload).await?;
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// GET /auth/me
+#[tracing::instrument(
+    skip(auth),                     // No logear el auth completo
+    fields(email = %auth.claims.email)  // Logear el email
+)]
+pub async fn get_user(auth: AuthenticatedUser) -> ApiResult<(StatusCode, Json<UserPublic>)> {
+    // El extractor ya validó el JWT y extrajo los Claims
+    // Aquí sacas la información directamente del token
+    let response = UserPublic {
+        email: auth.claims.email.clone(),
+        role: auth.claims.role.clone(),
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }
 
 /// POST /auth/login
