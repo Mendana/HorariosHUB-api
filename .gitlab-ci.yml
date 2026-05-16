@@ -18,7 +18,7 @@ cache:
     - .cargo/
     - /usr/local/cargo/registry/
     - /usr/local/cargo/git/
-    - /usr/local/cargo/bin/          # cache sqlx-cli binary
+    - /usr/local/cargo/bin/ # cache sqlx-cli binary
 
 before_script:
   - rustup component add rustfmt clippy
@@ -30,23 +30,17 @@ fmt:
   stage: checks
   script:
     - cargo fmt --all -- --check
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 clippy:
   stage: checks
   script:
     - cargo clippy --all-targets --all-features -- -D warnings
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 sqlx:
   stage: checks
   script:
     - cargo install sqlx-cli --no-default-features --features rustls,postgres
     - cargo sqlx prepare --check
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # =========================
 # TESTS
@@ -55,8 +49,6 @@ test:
   stage: test
   script:
     - cargo test --all-features --all-targets
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # =========================
 # BUILD
@@ -103,6 +95,7 @@ docker-build:
     - docker build -f docker/backend.dev.Dockerfile -t app:dev .
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # =========================
 # DOCKER PUSH (ONLY MAIN)
