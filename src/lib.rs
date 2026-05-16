@@ -10,10 +10,13 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLay
 use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::modules::auth::repository::{PgUserRepository, UserRepository};
+
 // Estado compartido que Axum inyecta en cada handler
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Arc<sqlx::PgPool>,
+    pub user_repo: Arc<dyn UserRepository>,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
 }
@@ -50,6 +53,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // 6. Estado
     let state = AppState {
+        user_repo: Arc::new(PgUserRepository::new(pool.clone())),
         pool: Arc::new(pool),
         cache,
         config: Arc::new(config.clone()),
@@ -70,4 +74,27 @@ pub async fn run() -> anyhow::Result<()> {
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+pub async fn create_test_app(db_url: &str) -> axum::Router {
+    let pool = db::create_pool(db_url)
+        .await
+        .expect("No se pudo conectar a la BBDD de test");
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Migraciones fallaron");
+
+    let pool = Arc::new(pool);
+    let user_repo = Arc::new(PgUserRepository::new((*pool).clone()));
+
+    let state = AppState {
+        pool,
+        user_repo,
+        cache: Arc::new(cache::MokaCache::new(100, 60)),
+        config: Arc::new(config::Config::load().expect("Config inválida")),
+    };
+
+    modules::routes().with_state(state)
 }

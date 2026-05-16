@@ -1,1 +1,136 @@
+use super::models::{RegisterRequest, RegisterResponse, UserRole};
+use crate::errors::AppError;
+use crate::modules::auth::repository::UserRepository;
 
+/// Registra un nuevo usuario en el sistema
+///
+/// # Flujo:
+/// 1. Verifica que el email no esté registrado
+/// 2. Hashea la contraseña
+/// 3. Crea el usuario en la base de datos con el rol de `Student` por defecto
+///
+/// # Errores:
+/// - [`AppError::Conflict`] si el email ya está registrado
+/// - [`AppError::Internal`] para errores en hashing o inserción en la base de datos
+pub async fn register(
+    repo: &dyn UserRepository,
+    payload: RegisterRequest,
+) -> Result<RegisterResponse, AppError> {
+    let email = payload.email.trim().to_lowercase();
+
+    if repo.find_by_email(&email).await?.is_some() {
+        return Err(AppError::Conflict("El email ya está registrado".into()));
+    }
+
+    let password = payload.password.clone();
+    let password_hash =
+        tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+            .await
+            .map_err(|e| AppError::Internal(e.into()))?
+            .map_err(|e| AppError::Internal(e.into()))?;
+
+    let user = repo
+        .create(&email, &password_hash, UserRole::Student)
+        .await?;
+
+    Ok(RegisterResponse {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+    })
+}
+
+// --- Testing ---
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::errors::AppError;
+    use crate::modules::auth::models::{RegisterRequest, User, UserRole};
+    use crate::modules::auth::repository::UserRepository;
+    use async_trait::async_trait;
+    use uuid::Uuid;
+
+    // Mock del repository para tests
+    struct MockUserRepository {
+        existing_email: Option<String>,
+    }
+
+    #[async_trait]
+    impl UserRepository for MockUserRepository {
+        async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
+            if self.existing_email.as_deref() == Some(email) {
+                Ok(Some(User {
+                    id: Uuid::new_v4(),
+                    email: email.to_string(),
+                    password_hash: "hash".to_string(),
+                    role: UserRole::Student,
+                    verified: false,
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+
+        async fn create(
+            &self,
+            email: &str,
+            _password_hash: &str,
+            role: UserRole,
+        ) -> Result<User, AppError> {
+            Ok(User {
+                id: Uuid::new_v4(),
+                email: email.to_string(),
+                password_hash: "hash".to_string(),
+                role,
+                verified: false,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn register_ok() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+        let payload = RegisterRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = register(&repo, payload).await;
+
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.email, "diego@uniovi.es");
+        assert_eq!(response.role, UserRole::Student);
+    }
+
+    #[tokio::test]
+    async fn register_normaliza_email_a_minusculas() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+        let payload = RegisterRequest {
+            email: "DIEGO@UNIOVI.ES".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = register(&repo, payload).await.unwrap();
+        assert_eq!(result.email, "diego@uniovi.es");
+    }
+
+    #[tokio::test]
+    async fn register_falla_si_email_duplicado() {
+        let repo = MockUserRepository {
+            existing_email: Some("diego@uniovi.es".to_string()),
+        };
+        let payload = RegisterRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = register(&repo, payload).await;
+
+        assert!(matches!(result, Err(AppError::Conflict(_))));
+    }
+}
