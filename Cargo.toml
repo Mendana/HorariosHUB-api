@@ -1,0 +1,82 @@
+[package]
+name = "horarioshub-api"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "horarioshub-api"
+path = "src/main.rs"
+
+[lib]
+name = "horarioshub_api"
+path = "src/lib.rs"
+
+[dependencies]
+# -- Async Runtime
+tokio = { version = "1", features = ["full"] }
+
+# -- Web framework
+axum = { version = "0.8", features = ["macros"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = [
+  "cors",
+  "trace",
+  "compression-gzip",
+  "request-id",
+]}
+
+# -- BBDD
+sqlx = { version = "0.8", features = [
+  "runtime-tokio-rustls",
+  "postgres",
+  "uuid",
+  "chrono",
+  "migrate"
+]}
+
+# -- Cache 
+moka = { version = "0.12", features = ["future"] }
+
+# -- Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# -- Secutiry
+jsonwebtoken = "10"
+bcrypt = "0.19"
+
+# -- Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# -- Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "json",
+] }
+
+# -- Errors
+thiserror = "2"
+anyhow = "1"
+
+# -- Validation
+validator = { version = "0.20", features = ["derive"] }
+
+# -- Environment variables
+dotenvy = "0.15"
+
+# -- Async traits
+async-trait = "0.1"
+
+# -- Testing
+[dev-dependencies]
+axum-test = "20"
+tokio = { version = "1", features = ["full", "test-util"] }
+
+# -- Release optimizations
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
