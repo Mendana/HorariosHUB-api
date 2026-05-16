@@ -25,7 +25,6 @@ before_script:
 # =========================
 # CHECKS
 # =========================
-
 fmt:
   stage: checks
   script:
@@ -45,7 +44,6 @@ sqlx:
 # =========================
 # TESTS
 # =========================
-
 test:
   stage: test
   script:
@@ -54,16 +52,24 @@ test:
 # =========================
 # BUILD
 # =========================
-
 build-release:
   stage: build
   script:
     - cargo build --release
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+build-dev:
+  stage: build
+  script:
+    - cargo build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH != "main"
 
 # =========================
 # DOCKER VALIDATION
 # =========================
-
 docker-build:
   stage: docker
   image: docker:28
@@ -74,14 +80,12 @@ docker-build:
   script:
     - docker build -t app:test .
   rules:
-    # Ejecutar en MRs y main
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
 
 # =========================
 # DOCKER PUSH (ONLY MAIN)
 # =========================
-
 docker-push:
   stage: docker
   image: docker:28
@@ -95,11 +99,9 @@ docker-push:
   script:
     - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-
-    # latest
     - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
       $CI_REGISTRY_IMAGE:latest
-
     - docker push $CI_REGISTRY_IMAGE:latest
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+
