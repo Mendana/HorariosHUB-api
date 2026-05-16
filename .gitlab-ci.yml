@@ -73,6 +73,8 @@ build-dev:
 docker-build:
   stage: docker
   image: docker:28
+  tags:
+    - docker-dind
   services:
     - docker:28-dind
   variables:
@@ -89,6 +91,8 @@ docker-build:
 docker-push:
   stage: docker
   image: docker:28
+  tags:
+    - docker-dind
   services:
     - docker:28-dind
   variables:
