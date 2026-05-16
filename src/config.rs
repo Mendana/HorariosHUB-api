@@ -45,5 +45,5 @@ impl Config {
 }
 
 fn required(key: &str) -> anyhow::Result<String> {
-    env::var(key).map_err(|_| anyhow::anyhow!("{} es requerido pero no se encontro", key))
+    env::var(key).map_err(|_| anyhow::anyhow!("{key} es requerido pero no se encontro"))
 }
