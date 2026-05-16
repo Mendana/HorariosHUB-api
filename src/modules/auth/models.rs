@@ -21,6 +21,29 @@ pub struct RegisterResponse {
     pub role: UserRole,
 }
 
+/// Payload del enpoint `POST /auth/login`
+#[derive(Debug, Deserialize, Validate)]
+pub struct LoginRequest {
+    #[validate(email(message = "Email inválido"))]
+    pub email: String,
+
+    #[validate(length(min = 1, message = "Contraseña requerida"))]
+    pub password: String,
+}
+
+/// Información pública del usuario que se devuelve en la respuesta de login
+#[derive(Debug, Serialize)]
+pub struct UserPublic {
+    pub email: String,
+    pub role: UserRole,
+}
+
+/// Respuesta del endpoint `POST /auth/login`
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    pub user: UserPublic,
+}
+
 /// Modelo de usuario para la base de datos
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {

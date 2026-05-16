@@ -8,5 +8,7 @@ use crate::AppState;
 use axum::{Router, routing::post};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/auth/register", post(handlers::register))
+    Router::new()
+        .route("/auth/register", post(handlers::register))
+        .route("/auth/login", post(handlers::login))
 }

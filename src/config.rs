@@ -4,7 +4,7 @@ use std::env;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
-    pub jwt_scret: String,
+    pub jwt_secret: String,
     pub jwt_access_ttl_seconds: u64,
     pub server_port: u16,
     pub rust_env: Environment,
@@ -22,7 +22,7 @@ impl Config {
 
         Ok(Self {
             database_url: required("DATABASE_URL")?,
-            jwt_scret: required("JWT_SECRET")?,
+            jwt_secret: required("JWT_SECRET")?,
             jwt_access_ttl_seconds: env::var("JWT_ACCESS_TTL_SECONDS")
                 .unwrap_or_else(|_| "900".into())
                 .parse()?,

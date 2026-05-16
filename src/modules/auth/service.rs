@@ -1,5 +1,8 @@
 use super::models::{RegisterRequest, RegisterResponse, UserRole};
+use crate::config::Config;
 use crate::errors::AppError;
+use crate::jwt;
+use crate::modules::auth::models::{LoginRequest, LoginResponse, UserPublic};
 use crate::modules::auth::repository::UserRepository;
 
 /// Registra un nuevo usuario en el sistema
@@ -38,6 +41,57 @@ pub async fn register(
         email: user.email,
         role: user.role,
     })
+}
+
+/// Realiza el login de un usuario y genera un JWT de acceso si las credenciales son correctas
+///
+/// # Flujo:
+/// 1. Busca el usuario por email
+/// 2. Verifica que la contraseña sea correcta
+/// 3. Genera un JWT con la información del usuario y el rol
+///
+/// # Errores:
+/// - [`AppError::Unauthorized`] si el email no existe o la contraseña es incorrecta
+/// - [`AppError::Internal`] para errores en verificación de contraseña o generación de token
+pub async fn login(
+    repo: &dyn UserRepository,
+    config: &Config,
+    payload: LoginRequest,
+) -> Result<(LoginResponse, String), AppError> {
+    let email = payload.email.trim().to_lowercase();
+
+    let user = repo
+        .find_by_email(&email)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+
+    let password = payload.password.clone();
+    let hash = user.password_hash.clone();
+    let valid = tokio::task::spawn_blocking(move || bcrypt::verify(password, &hash))
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    if !valid {
+        return Err(AppError::Unauthorized);
+    }
+
+    let token = jwt::generate_token(
+        &user.id.to_string(),
+        &user.email,
+        &user.role,
+        &config.jwt_secret,
+        config.jwt_access_ttl_seconds,
+    )?;
+
+    let response = LoginResponse {
+        user: UserPublic {
+            email: user.email,
+            role: user.role,
+        },
+    };
+
+    Ok((response, token))
 }
 
 // --- Testing ---
