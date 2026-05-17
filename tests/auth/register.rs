@@ -1,4 +1,4 @@
-use crate::common::setup;
+use crate::common::{login_user, setup};
 use axum::http::StatusCode;
 use serde_json::json;
 
@@ -68,4 +68,51 @@ async fn post_register_devuelve_400_si_password_corta() {
         .await;
 
     response.assert_status(StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn post_register_normaliza_email_a_minusculas() {
+    let ctx = setup().await;
+
+    let response = ctx
+        .server
+        .post("/auth/register")
+        .json(&json!({ "email": "UPPER@UNIOVI.ES", "password": "password123" }))
+        .await;
+
+    response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["email"], "upper@uniovi.es");
+}
+
+#[tokio::test]
+async fn post_register_devuelve_409_email_duplicado_case_insensitive() {
+    let ctx = setup().await;
+
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": "dup@uniovi.es", "password": "password123" }))
+        .await;
+
+    let response = ctx
+        .server
+        .post("/auth/register")
+        .json(&json!({ "email": "DUP@UNIOVI.ES", "password": "password123" }))
+        .await;
+
+    response.assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn post_register_permite_login_tras_registro() {
+    let ctx = setup().await;
+
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": "newuser@uniovi.es", "password": "password123" }))
+        .await
+        .assert_status(StatusCode::CREATED);
+
+    let token = login_user(&ctx.server, "newuser@uniovi.es", "password123").await;
+    assert!(!token.is_empty());
 }

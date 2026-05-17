@@ -54,3 +54,63 @@ impl AppCache for MokaCache {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn get_clave_inexistente_devuelve_none() {
+        let cache = MokaCache::new(100, 60);
+        assert_eq!(cache.get("no_existe").await, None);
+    }
+
+    #[tokio::test]
+    async fn set_y_get_devuelve_valor() {
+        let cache = MokaCache::new(100, 60);
+        cache.set("clave", "valor".to_string()).await;
+        assert_eq!(cache.get("clave").await, Some("valor".to_string()));
+    }
+
+    #[tokio::test]
+    async fn set_sobreescribe_valor_existente() {
+        let cache = MokaCache::new(100, 60);
+        cache.set("clave", "primero".to_string()).await;
+        cache.set("clave", "segundo".to_string()).await;
+        assert_eq!(cache.get("clave").await, Some("segundo".to_string()));
+    }
+
+    #[tokio::test]
+    async fn invalidate_elimina_clave() {
+        let cache = MokaCache::new(100, 60);
+        cache.set("clave", "valor".to_string()).await;
+        cache.invalidate("clave").await;
+        assert_eq!(cache.get("clave").await, None);
+    }
+
+    #[tokio::test]
+    async fn invalidate_clave_inexistente_no_falla() {
+        let cache = MokaCache::new(100, 60);
+        cache.invalidate("no_existe").await;
+    }
+
+    #[tokio::test]
+    async fn invalidate_prefix_elimina_claves_con_prefijo() {
+        let cache = MokaCache::new(100, 60);
+        cache.set("user:1:horario", "a".to_string()).await;
+        cache.set("user:1:perfil", "b".to_string()).await;
+        cache.set("user:2:horario", "c".to_string()).await;
+        cache.invalidate_prefix("user:1").await;
+        assert!(cache.get("user:1:horario").await.is_none());
+        assert!(cache.get("user:1:perfil").await.is_none());
+        assert!(cache.get("user:2:horario").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn invalidate_prefix_sin_coincidencias_no_falla() {
+        let cache = MokaCache::new(100, 60);
+        cache.set("user:1:data", "a".to_string()).await;
+        cache.invalidate_prefix("schedule").await;
+        assert_eq!(cache.get("user:1:data").await, Some("a".to_string()));
+    }
+}

@@ -63,6 +63,16 @@ async fn get_verify_devuelve_400_con_token_invalido() {
 }
 
 #[tokio::test]
+async fn get_verify_devuelve_400_sin_parametro_token() {
+    let ctx = setup().await;
+
+    // Sin ?token=... el extractor Query falla con 400
+    let response = ctx.server.get("/auth/verify").await;
+
+    response.assert_status(StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn get_verify_devuelve_400_si_token_ya_usado() {
     let ctx = setup().await;
 
