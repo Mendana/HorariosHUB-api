@@ -7,7 +7,7 @@ async fn get_auth_me_devuelve_200_con_usuario_autenticado() {
     let ctx = setup().await;
 
     let email = "me@uniovi.es";
-    let password = "password123";
+    let password = "Password123";
     ctx.server
         .post("/auth/register")
         .json(&json!({ "email": email, "password": password }))
@@ -68,7 +68,7 @@ async fn get_auth_me_devuelve_200_con_datos_correctos() {
     let ctx = setup().await;
 
     let email = "verify@uniovi.es";
-    let password = "password123";
+    let password = "Password123";
     ctx.server
         .post("/auth/register")
         .json(&json!({ "email": email, "password": password }))
@@ -113,7 +113,7 @@ async fn get_auth_me_con_multiples_usuarios() {
 
     let email1 = "user1@uniovi.es";
     let email2 = "user2@uniovi.es";
-    let password = "password123";
+    let password = "Password123";
 
     ctx.server
         .post("/auth/register")

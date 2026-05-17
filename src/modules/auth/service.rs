@@ -25,7 +25,19 @@ pub async fn register(
     repo: &dyn UserRepository,
     payload: RegisterRequest,
 ) -> Result<RegisterResponse, AppError> {
+    if !password_is_strong(&payload.password) {
+        return Err(AppError::Validation(
+            "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números".into(),
+        ));
+    }
+
     let email = payload.email.trim().to_lowercase();
+
+    if !email.ends_with("@uniovi.es") {
+        return Err(AppError::Validation(
+            "El email debe pertenecer al dominio @uniovi.es".into(),
+        ));
+    }
 
     if repo.find_by_email(&email).await?.is_some() {
         return Err(AppError::Conflict("El email ya está registrado".into()));
@@ -49,6 +61,15 @@ pub async fn register(
         email: user.email,
         role: user.role,
     })
+}
+
+fn password_is_strong(password: &str) -> bool {
+    let has_min_length = password.len() >= 8;
+    let has_uppercase = password.chars().any(|c| c.is_uppercase());
+    let has_lowercase = password.chars().any(|c| c.is_lowercase());
+    let has_digit = password.chars().any(|c| c.is_numeric());
+
+    has_min_length && has_uppercase && has_lowercase && has_digit
 }
 
 /// Realiza el login de un usuario y genera un JWT de acceso si las credenciales son correctas
@@ -151,6 +172,13 @@ pub async fn reset_password(
     }
 
     let password = payload.new_password.clone();
+
+    if !password_is_strong(&password) {
+        return Err(AppError::Validation(
+            "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números".into(),
+        ));
+    }
+
     let password_hash =
         tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
             .await
@@ -321,7 +349,7 @@ mod tests {
         };
         let payload = RegisterRequest {
             email: "diego@uniovi.es".to_string(),
-            password: "password123".to_string(),
+            password: "Password123".to_string(),
         };
 
         let result = register(&repo, payload).await;
@@ -339,7 +367,7 @@ mod tests {
         };
         let payload = RegisterRequest {
             email: "DIEGO@UNIOVI.ES".to_string(),
-            password: "password123".to_string(),
+            password: "Password123".to_string(),
         };
 
         let result = register(&repo, payload).await.unwrap();
@@ -353,12 +381,47 @@ mod tests {
         };
         let payload = RegisterRequest {
             email: "diego@uniovi.es".to_string(),
-            password: "password123".to_string(),
+            password: "Password123".to_string(),
         };
 
         let result = register(&repo, payload).await;
 
         assert!(matches!(result, Err(AppError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn register_falla_si_contraseña_debil() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+        let no_uppercase_password = RegisterRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "password123".to_string(),
+        };
+        let no_lowercase_password = RegisterRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "PASSWORD123".to_string(),
+        };
+        let no_numbers_password = RegisterRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "Password".to_string(),
+        };
+        let short_password = RegisterRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "Pass1".to_string(),
+        };
+
+        let result = register(&repo, no_uppercase_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+
+        let result = register(&repo, no_lowercase_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+
+        let result = register(&repo, no_numbers_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+
+        let result = register(&repo, short_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
     struct MockUserRepositoryLogin {
@@ -739,7 +802,7 @@ mod tests {
 
         let payload = ResetPasswordRequest {
             token: "reset_token".to_string(),
-            new_password: "newpassword123".to_string(),
+            new_password: "Newpassword123".to_string(),
         };
 
         let result = reset_password(&repo, payload).await;
@@ -837,13 +900,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reset_password_falla_contraseña_debil() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+
+        let short_password = ResetPasswordRequest {
+            token: "reset_token".to_string(),
+            new_password: "weak".to_string(),
+        };
+        let no_uppercase_password = ResetPasswordRequest {
+            token: "reset_token".to_string(),
+            new_password: "weakpassword1".to_string(),
+        };
+        let no_lowercase_password = ResetPasswordRequest {
+            token: "reset_token".to_string(),
+            new_password: "WEAKPASSWORD1".to_string(),
+        };
+        let no_numbers_password = ResetPasswordRequest {
+            token: "reset_token".to_string(),
+            new_password: "WeakPassword".to_string(),
+        };
+
+        let result = reset_password(&repo, short_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+
+        let result = reset_password(&repo, no_uppercase_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+
+        let result = reset_password(&repo, no_lowercase_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+
+        let result = reset_password(&repo, no_numbers_password).await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
+    }
+
+    #[tokio::test]
     async fn register_recorta_espacios_en_email() {
         let repo = MockUserRepository {
             existing_email: None,
         };
         let payload = RegisterRequest {
             email: "  diego@uniovi.es  ".to_string(),
-            password: "password123".to_string(),
+            password: "Password123".to_string(),
         };
         let result = register(&repo, payload).await.unwrap();
         assert_eq!(result.email, "diego@uniovi.es");

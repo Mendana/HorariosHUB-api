@@ -8,13 +8,13 @@ async fn post_login_devuelve_200_y_cookie() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "login@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "login@uniovi.es", "password": "Password123" }))
         .await;
 
     let response = ctx
         .server
         .post("/auth/login")
-        .json(&json!({ "email": "login@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "login@uniovi.es", "password": "Password123" }))
         .await;
 
     response.assert_status_ok();
@@ -36,7 +36,7 @@ async fn post_login_devuelve_401_si_password_incorrecta() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "login2@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "login2@uniovi.es", "password": "Password123" }))
         .await;
 
     let response = ctx
@@ -55,7 +55,7 @@ async fn post_login_devuelve_401_si_email_no_existe() {
     let response = ctx
         .server
         .post("/auth/login")
-        .json(&json!({ "email": "noexiste@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "noexiste@uniovi.es", "password": "Password123" }))
         .await;
 
     // Mismo error que contraseña incorrecta — no filtramos qué emails existen
@@ -68,14 +68,14 @@ async fn post_login_normaliza_email_a_minusculas() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "case@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "case@uniovi.es", "password": "Password123" }))
         .await;
 
     // Login con el email en mayúsculas debe funcionar
     let response = ctx
         .server
         .post("/auth/login")
-        .json(&json!({ "email": "CASE@UNIOVI.ES", "password": "password123" }))
+        .json(&json!({ "email": "CASE@UNIOVI.ES", "password": "Password123" }))
         .await;
 
     response.assert_status_ok();
@@ -89,7 +89,7 @@ async fn post_login_devuelve_422_si_password_vacia() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "emptypwd@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "emptypwd@uniovi.es", "password": "Password123" }))
         .await;
 
     let response = ctx

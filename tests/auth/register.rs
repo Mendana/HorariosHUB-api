@@ -11,7 +11,7 @@ async fn post_register_devuelve_201() {
         .post("/auth/register")
         .json(&json!({
             "email": "diego@uniovi.es",
-            "password": "password123"
+            "password": "Password123"
         }))
         .await;
 
@@ -29,7 +29,7 @@ async fn post_register_devuelve_409_si_email_duplicado() {
 
     let payload = json!({
         "email": "diego@uniovi.es",
-        "password": "password123"
+        "password": "Password123"
     });
 
     ctx.server.post("/auth/register").json(&payload).await;
@@ -39,7 +39,7 @@ async fn post_register_devuelve_409_si_email_duplicado() {
 }
 
 #[tokio::test]
-async fn post_register_devuelve_400_si_email_invalido() {
+async fn post_register_devuelve_422_si_email_invalido() {
     let ctx = setup().await;
 
     let response = ctx
@@ -47,15 +47,15 @@ async fn post_register_devuelve_400_si_email_invalido() {
         .post("/auth/register")
         .json(&json!({
             "email": "esto-no-es-un-email",
-            "password": "password123"
+            "password": "Password123"
         }))
         .await;
 
-    response.assert_status(StatusCode::BAD_REQUEST);
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]
-async fn post_register_devuelve_400_si_password_corta() {
+async fn post_register_devuelve_422_si_password_corta() {
     let ctx = setup().await;
 
     let response = ctx
@@ -67,7 +67,71 @@ async fn post_register_devuelve_400_si_password_corta() {
         }))
         .await;
 
-    response.assert_status(StatusCode::BAD_REQUEST);
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn post_register_devuelve_422_si_password_no_tiene_letras() {
+    let ctx = setup().await;
+
+    let response = ctx
+        .server
+        .post("/auth/register")
+        .json(&json!({
+            "email": "diego@uniovi.es",
+            "password": "12345678"
+        }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn post_register_devuelve_422_si_password_no_tiene_numeros() {
+    let ctx = setup().await;
+
+    let response = ctx
+        .server
+        .post("/auth/register")
+        .json(&json!({
+            "email": "diego@uniovi.es",
+            "password": "Password"
+        }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn post_register_devuelve_422_si_password_no_tiene_mayusculas() {
+    let ctx = setup().await;
+
+    let response = ctx
+        .server
+        .post("/auth/register")
+        .json(&json!({
+            "email": "diego@uniovi.es",
+            "password": "password123"
+        }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn post_register_devuelve_422_si_password_no_tiene_minusculas() {
+    let ctx = setup().await;
+
+    let response = ctx
+        .server
+        .post("/auth/register")
+        .json(&json!({
+            "email": "diego@uniovi.es",
+            "password": "PASSWORD123"
+        }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]
@@ -77,7 +141,7 @@ async fn post_register_normaliza_email_a_minusculas() {
     let response = ctx
         .server
         .post("/auth/register")
-        .json(&json!({ "email": "UPPER@UNIOVI.ES", "password": "password123" }))
+        .json(&json!({ "email": "UPPER@UNIOVI.ES", "password": "Password123" }))
         .await;
 
     response.assert_status(StatusCode::CREATED);
@@ -91,13 +155,13 @@ async fn post_register_devuelve_409_email_duplicado_case_insensitive() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "dup@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "dup@uniovi.es", "password": "Password123" }))
         .await;
 
     let response = ctx
         .server
         .post("/auth/register")
-        .json(&json!({ "email": "DUP@UNIOVI.ES", "password": "password123" }))
+        .json(&json!({ "email": "DUP@UNIOVI.ES", "password": "Password123" }))
         .await;
 
     response.assert_status(StatusCode::CONFLICT);
@@ -109,10 +173,10 @@ async fn post_register_permite_login_tras_registro() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "newuser@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "newuser@uniovi.es", "password": "Password123" }))
         .await
         .assert_status(StatusCode::CREATED);
 
-    let token = login_user(&ctx.server, "newuser@uniovi.es", "password123").await;
+    let token = login_user(&ctx.server, "newuser@uniovi.es", "Password123").await;
     assert!(!token.is_empty());
 }

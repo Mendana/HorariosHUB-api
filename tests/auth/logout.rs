@@ -6,7 +6,7 @@ async fn post_logout_con_inicio_sesion_devuelve_200() {
     let ctx = setup().await;
 
     let email = "me@uniovi.es";
-    let password = "password123";
+    let password = "Password123";
     ctx.server
         .post("/auth/register")
         .json(&json!({ "email": email, "password": password }))
@@ -27,7 +27,7 @@ async fn post_logout_con_inicio_sesion_devuelve_200() {
 async fn post_logout_borra_cookie_access_token() {
     let ctx = setup().await;
     let email = "logout_cookie@uniovi.es";
-    let password = "password123";
+    let password = "Password123";
 
     ctx.server
         .post("/auth/register")

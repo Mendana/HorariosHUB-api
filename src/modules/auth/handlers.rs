@@ -24,7 +24,7 @@ pub async fn register(
 ) -> ApiResult<(StatusCode, Json<RegisterResponse>)> {
     payload
         .validate()
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+        .map_err(|e| AppError::Validation(e.to_string()))?;
 
     let response = service::register(state.user_repo.as_ref(), payload).await?;
     Ok((StatusCode::CREATED, Json(response)))
@@ -105,16 +105,17 @@ pub async fn reset_password(
     Ok(Json(response))
 }
 
-#[tracing::instrument(skip(state,auth), fields(email = %auth.claims.email))]
+/// POST /auth/logout
+///
+/// Elimina la cookie de autenticación para cerrar la sesión del usuario
+#[tracing::instrument(skip(_state,auth), fields(email = %auth.claims.email))]
 pub async fn logout(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     auth: AuthenticatedUser,
 ) -> ApiResult<impl IntoResponse> {
     let mut headers = HeaderMap::new();
 
-    let cookie_value = format!(
-        "access_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
-    );
+    let cookie_value = "access_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0".to_string();
 
     headers.insert(
         header::SET_COOKIE,
