@@ -8,6 +8,14 @@ use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait UserRepository: Send + Sync {
+    /// Busca un usuario por su ID
+    ///
+    /// Devuelve `None` si no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, AppError>;
+
     /// Busca un usuario por su email
     ///
     /// Devuelve `None` si no existe
@@ -114,6 +122,22 @@ impl PgUserRepository {
 
 #[async_trait::async_trait]
 impl UserRepository for PgUserRepository {
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, AppError> {
+        let user = sqlx::query_as!(
+            User,
+            r#"
+        SELECT id, email, password_hash, role AS "role: UserRole", verified
+            FROM users
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as!(
             User,

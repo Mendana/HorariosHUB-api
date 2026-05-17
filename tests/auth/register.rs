@@ -20,7 +20,6 @@ async fn post_register_devuelve_201() {
     let body: serde_json::Value = response.json();
     assert_eq!(body["email"], "diego@uniovi.es");
     assert_eq!(body["role"], "student");
-    assert!(body["id"].is_string());
 }
 
 #[tokio::test]

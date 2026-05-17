@@ -34,6 +34,13 @@ pub async fn setup() -> TestContext {
     }
 }
 
+pub async fn verify_user(pool: &PgPool, email: &str) {
+    sqlx::query!("UPDATE users SET verified = true WHERE email = $1", email)
+        .execute(pool)
+        .await
+        .expect("No se pudo verificar el usuario en la DB");
+}
+
 pub async fn login_user(server: &TestServer, email: &str, password: &str) -> String {
     use serde_json::json;
 

@@ -1,4 +1,4 @@
-use crate::common::{login_user, setup};
+use crate::common::{login_user, setup, verify_user};
 use serde_json::json;
 
 #[tokio::test]
@@ -12,6 +12,7 @@ async fn post_logout_con_inicio_sesion_devuelve_200() {
         .json(&json!({ "email": email, "password": password }))
         .await;
 
+    verify_user(&ctx.pool, email).await;
     let token = login_user(&ctx.server, email, password).await;
 
     let response = ctx
@@ -34,6 +35,7 @@ async fn post_logout_borra_cookie_access_token() {
         .json(&json!({ "email": email, "password": password }))
         .await;
 
+    verify_user(&ctx.pool, email).await;
     let token = login_user(&ctx.server, email, password).await;
 
     let response = ctx

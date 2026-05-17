@@ -16,7 +16,6 @@ pub struct RegisterRequest {
 /// Respuesta del endpoint `POST /auth/register`
 #[derive(Debug, Serialize)]
 pub struct RegisterResponse {
-    pub id: Uuid,
     pub email: String,
     pub role: UserRole,
 }

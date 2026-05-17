@@ -1,15 +1,16 @@
 use crate::AppState;
 use crate::errors::AppError;
 use crate::jwt;
+use crate::modules::auth::models::{User, UserRole};
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::header::{AUTHORIZATION, COOKIE};
 use axum::http::request::Parts;
+use uuid::Uuid;
 
-/// Extractor que valida el JWT y extrae los Claims del usuario.
-/// Intenta leer el token del header `Authorization: Bearer` primero,
-/// y si no está presente, lo busca en la cookie `access_token`.
+/// Extractor para cualquier usuario autenticado y verificado.
+/// Valida el JWT, consulta la DB para obtener datos frescos y comprueba que el usuario esté verificado.
 pub struct AuthenticatedUser {
-    pub claims: jwt::Claims,
+    pub user: User,
 }
 
 impl<S> FromRequestParts<S> for AuthenticatedUser
@@ -26,8 +27,60 @@ where
         let token = token.ok_or(AppError::Unauthorized)?;
 
         let claims = jwt::verify_token(&token, &state.config.jwt_secret)?;
+        let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Unauthorized)?;
 
-        Ok(AuthenticatedUser { claims })
+        let user = state
+            .user_repo
+            .find_by_id(user_id)
+            .await?
+            .ok_or(AppError::Unauthorized)?;
+
+        if !user.verified {
+            return Err(AppError::Forbidden);
+        }
+
+        Ok(AuthenticatedUser { user })
+    }
+}
+
+/// Extractor que además requiere rol Admin.
+pub struct AdminUser(pub User);
+
+impl<S> FromRequestParts<S> for AdminUser
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth = AuthenticatedUser::from_request_parts(parts, state).await?;
+
+        if auth.user.role != UserRole::Admin {
+            return Err(AppError::Forbidden);
+        }
+
+        Ok(AdminUser(auth.user))
+    }
+}
+
+/// Extractor que además requiere rol Professor o superior.
+pub struct ProfessorOrAbove(pub User);
+
+impl<S> FromRequestParts<S> for ProfessorOrAbove
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth = AuthenticatedUser::from_request_parts(parts, state).await?;
+
+        match auth.user.role {
+            UserRole::Professor | UserRole::Admin => Ok(ProfessorOrAbove(auth.user)),
+            _ => Err(AppError::Forbidden),
+        }
     }
 }
 
