@@ -4,7 +4,10 @@ use super::models::{RegisterRequest, RegisterResponse, UserRole};
 use crate::config::Config;
 use crate::errors::AppError;
 use crate::jwt;
-use crate::modules::auth::models::{LoginRequest, LoginResponse, UserPublic, VerifyEmailResponse};
+use crate::modules::auth::models::{
+    LoginRequest, LoginResponse, ResetPasswordRequest, ResetPasswordResponse, UserPublic,
+    VerifyEmailResponse,
+};
 use crate::modules::auth::repository::UserRepository;
 
 /// Registra un nuevo usuario en el sistema
@@ -132,12 +135,45 @@ pub async fn verify_email(
     })
 }
 
+pub async fn reset_password(
+    repo: &dyn UserRepository,
+    payload: ResetPasswordRequest,
+) -> Result<ResetPasswordResponse, AppError> {
+    let reset_token = repo
+        .find_password_reset_token(&payload.token)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Token inválido o ya utilizado".into()))?;
+
+    if reset_token.expires_at < Utc::now() {
+        repo.delete_password_reset_token(reset_token.id).await?;
+        return Err(AppError::BadRequest("El token ha expirado".into()));
+    }
+
+    let password = payload.new_password.clone();
+    let password_hash =
+        tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+            .await
+            .map_err(|e| AppError::Internal(e.into()))?
+            .map_err(|e| AppError::Internal(e.into()))?;
+
+    repo.update_password(reset_token.user_id, &password_hash)
+        .await?;
+
+    repo.delete_password_reset_token(reset_token.id).await?;
+
+    Ok(ResetPasswordResponse {
+        message: "Contraseña actualizada".into(),
+    })
+}
+
 // --- Testing ---
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::errors::AppError;
-    use crate::modules::auth::models::{RegisterRequest, User, UserRole, VerificationToken};
+    use crate::modules::auth::models::{
+        PasswordResetToken, RegisterRequest, User, UserRole, VerificationToken,
+    };
     use crate::modules::auth::repository::UserRepository;
     use async_trait::async_trait;
     use uuid::Uuid;
@@ -201,6 +237,34 @@ mod tests {
         async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
             Ok(())
         }
+
+        async fn find_password_reset_token(
+            &self,
+            _token: &str,
+        ) -> Result<Option<PasswordResetToken>, AppError> {
+            Ok(Some(PasswordResetToken {
+                id: Uuid::new_v4(),
+                user_id: Uuid::new_v4(),
+                token: "reset_token".to_string(),
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            }))
+        }
+
+        async fn delete_password_reset_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn update_password(
+            &self,
+            _user_id: Uuid,
+            _password_hash: &str,
+        ) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn create_password_reset_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+            Ok("reset_token".to_string())
+        }
     }
 
     #[tokio::test]
@@ -248,5 +312,544 @@ mod tests {
         let result = register(&repo, payload).await;
 
         assert!(matches!(result, Err(AppError::Conflict(_))));
+    }
+
+    struct MockUserRepositoryLogin {
+        existing_email: Option<String>,
+        password_hash: String,
+    }
+
+    #[async_trait]
+    impl UserRepository for MockUserRepositoryLogin {
+        async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
+            if self.existing_email.as_deref() == Some(email) {
+                Ok(Some(User {
+                    id: Uuid::new_v4(),
+                    email: email.to_string(),
+                    password_hash: self.password_hash.clone(),
+                    role: UserRole::Student,
+                    verified: true,
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+
+        async fn create(
+            &self,
+            email: &str,
+            _password_hash: &str,
+            role: UserRole,
+        ) -> Result<User, AppError> {
+            Ok(User {
+                id: Uuid::new_v4(),
+                email: email.to_string(),
+                password_hash: self.password_hash.clone(),
+                role,
+                verified: false,
+            })
+        }
+
+        async fn create_verification_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+            Ok("token".to_string())
+        }
+
+        async fn delete_verification_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn find_verification_token(
+            &self,
+            _token: &str,
+        ) -> Result<Option<VerificationToken>, AppError> {
+            Ok(Some(VerificationToken {
+                id: Uuid::new_v4(),
+                user_id: Uuid::new_v4(),
+                token: "token".to_string(),
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+            }))
+        }
+
+        async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn find_password_reset_token(
+            &self,
+            _token: &str,
+        ) -> Result<Option<PasswordResetToken>, AppError> {
+            Ok(None)
+        }
+
+        async fn delete_password_reset_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn update_password(
+            &self,
+            _user_id: Uuid,
+            _password_hash: &str,
+        ) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn create_password_reset_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+            Ok("reset_token".to_string())
+        }
+    }
+
+    #[tokio::test]
+    async fn login_ok() {
+        // Generar hash válido de "password123" en el test
+        let password_hash =
+            tokio::task::spawn_blocking(|| bcrypt::hash("password123", bcrypt::DEFAULT_COST))
+                .await
+                .unwrap()
+                .unwrap();
+
+        let repo = MockUserRepositoryLogin {
+            existing_email: Some("diego@uniovi.es".to_string()),
+            password_hash,
+        };
+        let config = Config {
+            database_url: "postgres://localhost/test".to_string(),
+            jwt_secret: "secret".to_string(),
+            jwt_access_ttl_seconds: 900,
+            server_port: 3001,
+            rust_env: crate::config::Environment::Development,
+        };
+        let payload = LoginRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = login(&repo, &config, payload).await;
+
+        assert!(result.is_ok());
+        let (response, _token) = result.unwrap();
+        assert_eq!(response.user.email, "diego@uniovi.es");
+        assert_eq!(response.user.role, UserRole::Student);
+    }
+
+    #[tokio::test]
+    async fn login_falla_con_email_invalido() {
+        let password_hash =
+            tokio::task::spawn_blocking(|| bcrypt::hash("password123", bcrypt::DEFAULT_COST))
+                .await
+                .unwrap()
+                .unwrap();
+
+        let repo = MockUserRepositoryLogin {
+            existing_email: Some("diego@uniovi.es".to_string()),
+            password_hash,
+        };
+        let config = Config {
+            database_url: "postgres://localhost/test".to_string(),
+            jwt_secret: "secret".to_string(),
+            jwt_access_ttl_seconds: 900,
+            server_port: 3001,
+            rust_env: crate::config::Environment::Development,
+        };
+        let payload = LoginRequest {
+            email: "otro@uniovi.es".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = login(&repo, &config, payload).await;
+
+        assert!(matches!(result, Err(AppError::Unauthorized)));
+    }
+
+    #[tokio::test]
+    async fn login_falla_con_contraseña_incorrecta() {
+        let password_hash =
+            tokio::task::spawn_blocking(|| bcrypt::hash("password123", bcrypt::DEFAULT_COST))
+                .await
+                .unwrap()
+                .unwrap();
+
+        let repo = MockUserRepositoryLogin {
+            existing_email: Some("diego@uniovi.es".to_string()),
+            password_hash,
+        };
+        let config = Config {
+            database_url: "postgres://localhost/test".to_string(),
+            jwt_secret: "secret".to_string(),
+            jwt_access_ttl_seconds: 900,
+            server_port: 3001,
+            rust_env: crate::config::Environment::Development,
+        };
+        let payload = LoginRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "contraseña_incorrecta".to_string(),
+        };
+
+        let result = login(&repo, &config, payload).await;
+
+        assert!(matches!(result, Err(AppError::Unauthorized)));
+    }
+
+    #[tokio::test]
+    async fn verify_email_ok() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+
+        let result = verify_email(&repo, "token").await;
+
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.message, "Email verificado correctamente");
+    }
+
+    #[tokio::test]
+    async fn verify_email_falla_token_expirado() {
+        let _repo = MockUserRepository {
+            existing_email: None,
+        };
+
+        // Modificamos el mock para simular un token expirado
+        struct MockUserRepositoryExpired;
+
+        #[async_trait]
+        impl UserRepository for MockUserRepositoryExpired {
+            async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
+            async fn create(
+                &self,
+                _email: &str,
+                _password_hash: &str,
+                _role: UserRole,
+            ) -> Result<User, AppError> {
+                Ok(User {
+                    id: Uuid::new_v4(),
+                    email: "test@test.com".to_string(),
+                    password_hash: "hash".to_string(),
+                    role: UserRole::Student,
+                    verified: false,
+                })
+            }
+
+            async fn create_verification_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+                Ok("token".to_string())
+            }
+
+            async fn delete_verification_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_verification_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<VerificationToken>, AppError> {
+                Ok(Some(VerificationToken {
+                    id: Uuid::new_v4(),
+                    user_id: Uuid::new_v4(),
+                    token: "token".to_string(),
+                    expires_at: chrono::Utc::now() - chrono::Duration::hours(1),
+                }))
+            }
+
+            async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_password_reset_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<PasswordResetToken>, AppError> {
+                Ok(None)
+            }
+
+            async fn delete_password_reset_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn update_password(
+                &self,
+                _user_id: Uuid,
+                _password_hash: &str,
+            ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn create_password_reset_token(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<String, AppError> {
+                Ok("reset_token".to_string())
+            }
+        }
+
+        let repo = MockUserRepositoryExpired;
+        let result = verify_email(&repo, "token").await;
+
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn verify_email_falla_token_invalido() {
+        struct MockUserRepositoryInvalidToken;
+
+        #[async_trait]
+        impl UserRepository for MockUserRepositoryInvalidToken {
+            async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
+            async fn create(
+                &self,
+                _email: &str,
+                _password_hash: &str,
+                _role: UserRole,
+            ) -> Result<User, AppError> {
+                Ok(User {
+                    id: Uuid::new_v4(),
+                    email: "test@test.com".to_string(),
+                    password_hash: "hash".to_string(),
+                    role: UserRole::Student,
+                    verified: false,
+                })
+            }
+
+            async fn create_verification_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+                Ok("token".to_string())
+            }
+
+            async fn delete_verification_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_verification_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<VerificationToken>, AppError> {
+                Ok(None)
+            }
+
+            async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_password_reset_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<PasswordResetToken>, AppError> {
+                Ok(None)
+            }
+
+            async fn delete_password_reset_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn update_password(
+                &self,
+                _user_id: Uuid,
+                _password_hash: &str,
+            ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn create_password_reset_token(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<String, AppError> {
+                Ok("reset_token".to_string())
+            }
+        }
+
+        let repo = MockUserRepositoryInvalidToken;
+        let result = verify_email(&repo, "invalid_token").await;
+
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn reset_password_ok() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+
+        let payload = ResetPasswordRequest {
+            token: "reset_token".to_string(),
+            new_password: "newpassword123".to_string(),
+        };
+
+        let result = reset_password(&repo, payload).await;
+
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.message, "Contraseña actualizada");
+    }
+
+    #[tokio::test]
+    async fn reset_password_falla_token_expirado() {
+        struct MockUserRepositoryResetExpired;
+
+        #[async_trait]
+        impl UserRepository for MockUserRepositoryResetExpired {
+            async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
+            async fn create(
+                &self,
+                _email: &str,
+                _password_hash: &str,
+                _role: UserRole,
+            ) -> Result<User, AppError> {
+                Ok(User {
+                    id: Uuid::new_v4(),
+                    email: "test@test.com".to_string(),
+                    password_hash: "hash".to_string(),
+                    role: UserRole::Student,
+                    verified: false,
+                })
+            }
+
+            async fn create_verification_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+                Ok("token".to_string())
+            }
+
+            async fn delete_verification_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_verification_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<VerificationToken>, AppError> {
+                Ok(None)
+            }
+
+            async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_password_reset_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<PasswordResetToken>, AppError> {
+                Ok(Some(PasswordResetToken {
+                    id: Uuid::new_v4(),
+                    user_id: Uuid::new_v4(),
+                    token: "reset_token".to_string(),
+                    expires_at: chrono::Utc::now() - chrono::Duration::hours(1),
+                }))
+            }
+
+            async fn delete_password_reset_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn update_password(
+                &self,
+                _user_id: Uuid,
+                _password_hash: &str,
+            ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn create_password_reset_token(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<String, AppError> {
+                Ok("reset_token".to_string())
+            }
+        }
+
+        let repo = MockUserRepositoryResetExpired;
+        let payload = ResetPasswordRequest {
+            token: "reset_token".to_string(),
+            new_password: "newpassword123".to_string(),
+        };
+
+        let result = reset_password(&repo, payload).await;
+
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn reset_password_falla_token_invalido() {
+        struct MockUserRepositoryResetInvalid;
+
+        #[async_trait]
+        impl UserRepository for MockUserRepositoryResetInvalid {
+            async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
+            async fn create(
+                &self,
+                _email: &str,
+                _password_hash: &str,
+                _role: UserRole,
+            ) -> Result<User, AppError> {
+                Ok(User {
+                    id: Uuid::new_v4(),
+                    email: "test@test.com".to_string(),
+                    password_hash: "hash".to_string(),
+                    role: UserRole::Student,
+                    verified: false,
+                })
+            }
+
+            async fn create_verification_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+                Ok("token".to_string())
+            }
+
+            async fn delete_verification_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_verification_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<VerificationToken>, AppError> {
+                Ok(None)
+            }
+
+            async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn find_password_reset_token(
+                &self,
+                _token: &str,
+            ) -> Result<Option<PasswordResetToken>, AppError> {
+                Ok(None)
+            }
+
+            async fn delete_password_reset_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn update_password(
+                &self,
+                _user_id: Uuid,
+                _password_hash: &str,
+            ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn create_password_reset_token(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<String, AppError> {
+                Ok("reset_token".to_string())
+            }
+        }
+
+        let repo = MockUserRepositoryResetInvalid;
+        let payload = ResetPasswordRequest {
+            token: "invalid_token".to_string(),
+            new_password: "newpassword123".to_string(),
+        };
+
+        let result = reset_password(&repo, payload).await;
+
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
     }
 }

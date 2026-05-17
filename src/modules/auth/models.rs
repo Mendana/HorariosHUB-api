@@ -55,6 +55,23 @@ pub struct VerifyEmailResponse {
     pub message: String,
 }
 
+/// Payload del endpoint `POST /auth/reset-password`
+#[derive(Debug, Deserialize, Validate)]
+pub struct ResetPasswordRequest {
+    #[validate(length(min = 1, message = "Token requerido"))]
+    pub token: String,
+
+    #[validate(length(min = 8, message = "La contraseña debe tener al menos 8 caracteres"))]
+    pub new_password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ResetPasswordResponse {
+    pub message: String,
+}
+
+// --- Modelos de base de datos ---
+
 /// Modelo de usuario para la base de datos
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {
@@ -68,6 +85,15 @@ pub struct User {
 /// Modelo de verificación de email para la base de datos
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct VerificationToken {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub token: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Modelo de restablecimiento de contraseña para la base de datos
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct PasswordResetToken {
     pub id: Uuid,
     pub user_id: Uuid,
     pub token: String,
