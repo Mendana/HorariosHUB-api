@@ -70,6 +70,11 @@ pub struct ResetPasswordResponse {
     pub message: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct LogoutResponse {
+    pub message: String,
+}
+
 /// Payload del endpoint `POST /auth/recover`
 #[derive(Debug, Deserialize, Validate)]
 pub struct RecoverPasswordRequest {

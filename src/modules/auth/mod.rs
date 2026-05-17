@@ -11,11 +11,14 @@ use axum::{
 };
 
 pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/auth/register", post(handlers::register))
-        .route("/auth/me", get(handlers::get_user))
-        .route("/auth/login", post(handlers::login))
-        .route("/auth/verify", get(handlers::verify_email))
-        .route("/auth/reset-password", post(handlers::reset_password))
-        .route("/auth/recover", post(handlers::recover_password))
+    let auth_routes = Router::new()
+        .route("/register", post(handlers::register))
+        .route("/me", get(handlers::get_user))
+        .route("/login", post(handlers::login))
+        .route("/verify", get(handlers::verify_email))
+        .route("/reset-password", post(handlers::reset_password))
+        .route("/recover", post(handlers::recover_password))
+        .route("/logout", post(handlers::logout));
+
+    Router::new().nest("/auth", auth_routes)
 }
