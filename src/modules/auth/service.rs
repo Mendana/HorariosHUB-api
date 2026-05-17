@@ -790,6 +790,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn register_recorta_espacios_en_email() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+        let payload = RegisterRequest {
+            email: "  diego@uniovi.es  ".to_string(),
+            password: "password123".to_string(),
+        };
+        let result = register(&repo, payload).await.unwrap();
+        assert_eq!(result.email, "diego@uniovi.es");
+    }
+
+    #[tokio::test]
+    async fn login_normaliza_email_a_minusculas() {
+        let password_hash =
+            tokio::task::spawn_blocking(|| bcrypt::hash("password123", bcrypt::DEFAULT_COST))
+                .await
+                .unwrap()
+                .unwrap();
+
+        let repo = MockUserRepositoryLogin {
+            existing_email: Some("diego@uniovi.es".to_string()),
+            password_hash,
+        };
+        let config = Config {
+            database_url: "postgres://localhost/test".to_string(),
+            jwt_secret: "secret".to_string(),
+            jwt_access_ttl_seconds: 900,
+            server_port: 3001,
+            rust_env: crate::config::Environment::Development,
+            smtp_host: "localhost".to_string(),
+            smtp_port: 1025,
+            smtp_user: "test".to_string(),
+            smtp_password: "test".to_string(),
+            smtp_from: "no-reply@horarioshub.com".to_string(),
+            base_url: "http://localhost:3000".to_string(),
+        };
+        let payload = LoginRequest {
+            email: "DIEGO@UNIOVI.ES".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = login(&repo, &config, payload).await;
+
+        assert!(result.is_ok());
+        let (response, _token) = result.unwrap();
+        assert_eq!(response.user.email, "diego@uniovi.es");
+    }
+
+    #[tokio::test]
     async fn reset_password_falla_token_invalido() {
         struct MockUserRepositoryResetInvalid;
 

@@ -61,3 +61,43 @@ async fn post_login_devuelve_401_si_email_no_existe() {
     // Mismo error que contraseña incorrecta — no filtramos qué emails existen
     response.assert_status(StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn post_login_normaliza_email_a_minusculas() {
+    let ctx = setup().await;
+
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": "case@uniovi.es", "password": "password123" }))
+        .await;
+
+    // Login con el email en mayúsculas debe funcionar
+    let response = ctx
+        .server
+        .post("/auth/login")
+        .json(&json!({ "email": "CASE@UNIOVI.ES", "password": "password123" }))
+        .await;
+
+    response.assert_status_ok();
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["user"]["email"], "case@uniovi.es");
+}
+
+#[tokio::test]
+async fn post_login_devuelve_422_si_password_vacia() {
+    let ctx = setup().await;
+
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": "emptypwd@uniovi.es", "password": "password123" }))
+        .await;
+
+    let response = ctx
+        .server
+        .post("/auth/login")
+        .json(&json!({ "email": "emptypwd@uniovi.es", "password": "" }))
+        .await;
+
+    // Contraseña vacía no pasa la validación del handler
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
