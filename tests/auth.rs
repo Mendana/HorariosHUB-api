@@ -6,5 +6,7 @@ mod login;
 mod me;
 #[path = "auth/register.rs"]
 mod register;
+#[path = "auth/reset_password.rs"]
+mod reset_password;
 #[path = "auth/verify.rs"]
 mod verify;

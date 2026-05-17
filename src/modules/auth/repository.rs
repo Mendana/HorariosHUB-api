@@ -1,6 +1,10 @@
 use super::models::{User, UserRole};
-use crate::{errors::AppError, modules::auth::models::VerificationToken};
+use crate::{
+    errors::AppError,
+    modules::auth::models::{PasswordResetToken, VerificationToken},
+};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait UserRepository: Send + Sync {
@@ -57,8 +61,45 @@ pub trait UserRepository: Send + Sync {
     ///
     /// # Errores:
     /// - [`AppError::Internal`] para errores en la eliminación en la base de datos (e.g. conexión)
-    /// - [`AppError::NotFound`] si no existe un token con el ID dado
     async fn delete_verification_token(&self, token_id: uuid::Uuid) -> Result<(), AppError>;
+
+    /// Crea un token de restablecimiento de contraseña para el usuario con el ID dado
+    /// Devuelve el token generado
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la inserción en la base de datos (e.g. conexión)
+    /// - [`AppError::NotFound`] si no existe un usuario con el ID dado
+    async fn create_password_reset_token(&self, user_id: uuid::Uuid) -> Result<String, AppError>;
+
+    /// Busca un token de restablecimiento de contraseña por su valor y devuelve el token encontrado
+    /// Devuelve `None` si no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos (e.g. conexión)
+    /// - [`AppError::NotFound`] si no existe un token con el valor dado
+    async fn find_password_reset_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<PasswordResetToken>, AppError>;
+
+    /// Actualiza la contraseña del usuario con el ID dado al nuevo hash de contraseña proporcionado
+    /// Devuelve `Ok(())` si la operación fue exitosa
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la actualización en la base de datos
+    /// - [`AppError::NotFound`] si no existe un usuario con el ID dado
+    async fn update_password(
+        &self,
+        user_id: uuid::Uuid,
+        new_password_hash: &str,
+    ) -> Result<(), AppError>;
+
+    /// Elimina el token de restablecimiento de contraseña con el ID dado de la base de datos
+    /// Devuelve `Ok(())` si la operación fue exitosa o si el token no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la eliminación en la base de datos
+    async fn delete_password_reset_token(&self, token_id: uuid::Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgUserRepository {
@@ -189,6 +230,74 @@ impl UserRepository for PgUserRepository {
         )
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    async fn create_password_reset_token(&self, user_id: uuid::Uuid) -> Result<String, AppError> {
+        // Invalidar tokens anteriores del mismo usuario
+        sqlx::query!(
+            "DELETE from password_reset_tokens WHERE user_id = $1",
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        let token = Uuid::new_v4().to_string();
+
+        sqlx::query!(
+            r#"
+            INSERT INTO password_reset_tokens (user_id, token, expires_at)
+            VALUES ($1, $2, NOW() + INTERVAL '1 hour')
+            "#,
+            user_id,
+            token
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(token)
+    }
+
+    async fn find_password_reset_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<PasswordResetToken>, AppError> {
+        let record = sqlx::query_as!(
+            PasswordResetToken,
+            r#"
+            SELECT id, user_id, token, expires_at
+            FROM password_reset_tokens
+            WHERE token = $1
+            "#,
+            token
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    async fn update_password(
+        &self,
+        user_id: uuid::Uuid,
+        new_password_hash: &str,
+    ) -> Result<(), AppError> {
+        sqlx::query!(
+            "UPDATE users SET password_hash = $1 WHERE id = $2",
+            new_password_hash,
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn delete_password_reset_token(&self, token_id: uuid::Uuid) -> Result<(), AppError> {
+        sqlx::query!("DELETE FROM password_reset_tokens WHERE id = $1", token_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

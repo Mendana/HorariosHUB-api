@@ -2,7 +2,10 @@ use super::middleware::AuthenticatedUser;
 use super::models::{RegisterRequest, RegisterResponse, UserPublic};
 use super::service;
 use crate::errors::AppError;
-use crate::modules::auth::models::{LoginRequest, VerifyEmailQuery, VerifyEmailResponse};
+use crate::modules::auth::models::{
+    LoginRequest, ResetPasswordRequest, ResetPasswordResponse, VerifyEmailQuery,
+    VerifyEmailResponse,
+};
 use crate::{AppState, errors::ApiResult};
 use axum::extract::Query;
 use axum::http::{HeaderMap, HeaderValue, header};
@@ -81,6 +84,23 @@ pub async fn verify_email(
     Query(query): Query<VerifyEmailQuery>,
 ) -> ApiResult<Json<VerifyEmailResponse>> {
     let response = service::verify_email(state.user_repo.as_ref(), &query.token).await?;
+
+    Ok(Json(response))
+}
+
+/// POST /auth/reset-password
+///
+/// Cambia la constraseña del usuario
+#[tracing::instrument(skip(state, payload))]
+pub async fn reset_password(
+    State(state): State<AppState>,
+    Json(payload): Json<ResetPasswordRequest>,
+) -> ApiResult<Json<ResetPasswordResponse>> {
+    payload
+        .validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let response = service::reset_password(state.user_repo.as_ref(), payload).await?;
 
     Ok(Json(response))
 }
