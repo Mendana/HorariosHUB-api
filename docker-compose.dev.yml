@@ -1,16 +1,14 @@
 services:
   db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: horariosUser
-      POSTGRES_PASSWORD: horariosUser_dev
-      POSTGRES_DB: horarioshub
+    image: horariospceo.ingenieriainformatica.uniovi.es:5050/horarioshub/docker-images/horarioshub-db-populada:latest
+    env_file:
+      - .env
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U horariosUser"]
+      test: ["CMD-SHELL", "pg_isready -U horariosUser -d horarioshub"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,18 +17,14 @@ services:
     build:
       context: .
       dockerfile: docker/backend.dev.Dockerfile
-    environment:
-      DATABASE_URL: postgres://horariosUser:horariosUser_dev@db:5432/horarioshub
-      JWT_SECRET: sY2mQue5MPLjSdAU9TkSZm4r8sJX37dM44eAReushdG
-      SERVER_PORT: 3001
-      RUST_LOG: debug
-      RUST_ENV: development
+    env_file:
+      - .env
     ports:
       - "3001:3001"
     volumes:
-      - .:/app # Codigo fuente
-      - cargo_cache:/usr/local/cargo # caché de dependencias
-      - target_cache:/app/target # caché de compilación
+      - .:/app
+      - cargo_cache:/usr/local/cargo
+      - target_cache:/app/target
     depends_on:
       db:
         condition: service_healthy

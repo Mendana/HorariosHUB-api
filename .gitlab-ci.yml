@@ -1,13 +1,20 @@
 stages:
   - checks
   - test
-  - build
   - docker
 
 variables:
   CARGO_TERM_COLOR: always
   SQLX_OFFLINE: "true"
   CARGO_HOME: "${CI_PROJECT_DIR}/.cargo"
+
+# Evita pipelines duplicadas: si hay MR abierto, solo corre la pipeline de MR
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
 
 default:
   image: rust:1.88
@@ -22,43 +29,31 @@ before_script:
   - rustup component add rustfmt clippy
 
 # =========================
-# CHECKS
+# CHECKS (solo en MR)
 # =========================
 fmt:
   stage: checks
   script:
     - cargo fmt --all -- --check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 clippy:
   stage: checks
   script:
     - cargo clippy --all-targets --all-features -- -D warnings
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # =========================
-# TESTS
+# TESTS (solo en MR)
 # =========================
 test:
   stage: test
   script:
     - cargo test --all-features --all-targets
-
-# =========================
-# BUILD
-# =========================
-build-release:
-  stage: build
-  script:
-    - cargo build --release
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-
-build-dev:
-  stage: build
-  script:
-    - cargo build
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH != "main"
 
 # =========================
 # DOCKER SHARED CONFIG
@@ -78,19 +73,7 @@ build-dev:
     DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
 
 # =========================
-# DOCKER VALIDATION
-# =========================
-docker-build:
-  extends: .docker-base
-  stage: docker
-  script:
-    - docker build -f docker/backend.dev.Dockerfile -t app:dev .
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-
-# =========================
-# DOCKER PUSH (ONLY MAIN)
+# DOCKER PUSH (solo al mergear a main)
 # =========================
 docker-push:
   extends: .docker-base
