@@ -1,8 +1,10 @@
+use chrono::Utc;
+
 use super::models::{RegisterRequest, RegisterResponse, UserRole};
 use crate::config::Config;
 use crate::errors::AppError;
 use crate::jwt;
-use crate::modules::auth::models::{LoginRequest, LoginResponse, UserPublic};
+use crate::modules::auth::models::{LoginRequest, LoginResponse, UserPublic, VerifyEmailResponse};
 use crate::modules::auth::repository::UserRepository;
 
 /// Registra un nuevo usuario en el sistema
@@ -35,6 +37,8 @@ pub async fn register(
     let user = repo
         .create(&email, &password_hash, UserRole::Student)
         .await?;
+
+    repo.create_verification_token(user.id).await?;
 
     Ok(RegisterResponse {
         id: user.id,
@@ -94,12 +98,46 @@ pub async fn login(
     Ok((response, token))
 }
 
+/// Verifica el email de un usuario utilizando un token de verificación
+///
+/// # Flujo:
+/// 1. Busca el token de verificación en la base de datos
+/// 2. Verifica que el token no haya expirado
+/// 3. Marca el usuario como verificado
+/// 4. Elimina el token de verificación
+///
+/// # Errores:
+/// - [`AppError::BadRequest`] si el token es inválido, ya utilizado o ha expirado
+/// - [`AppError::Internal`] para errores en la base de datos o en la lógica de verificación
+pub async fn verify_email(
+    repo: &dyn UserRepository,
+    token: &str,
+) -> Result<VerifyEmailResponse, AppError> {
+    let verification = repo
+        .find_verification_token(token)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Token inválido o ya utilizado".into()))?;
+
+    if verification.expires_at < Utc::now() {
+        repo.delete_verification_token(verification.id).await?;
+        return Err(AppError::BadRequest("El token ha expirado".into()));
+    }
+
+    repo.mark_user_as_verified(verification.user_id).await?;
+
+    repo.delete_verification_token(verification.id).await?;
+
+    Ok(VerifyEmailResponse {
+        message: "Email verificado correctamente".into(),
+    })
+}
+
 // --- Testing ---
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::errors::AppError;
-    use crate::modules::auth::models::{RegisterRequest, User, UserRole};
+    use crate::modules::auth::models::{RegisterRequest, User, UserRole, VerificationToken};
     use crate::modules::auth::repository::UserRepository;
     use async_trait::async_trait;
     use uuid::Uuid;
@@ -138,6 +176,30 @@ mod tests {
                 role,
                 verified: false,
             })
+        }
+
+        async fn create_verification_token(&self, _user_id: Uuid) -> Result<String, AppError> {
+            Ok("token".to_string())
+        }
+
+        async fn delete_verification_token(&self, _token_id: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn find_verification_token(
+            &self,
+            _token: &str,
+        ) -> Result<Option<VerificationToken>, AppError> {
+            Ok(Some(VerificationToken {
+                id: Uuid::new_v4(),
+                user_id: Uuid::new_v4(),
+                token: "token".to_string(),
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+            }))
+        }
+
+        async fn mark_user_as_verified(&self, _user_id: Uuid) -> Result<(), AppError> {
+            Ok(())
         }
     }
 

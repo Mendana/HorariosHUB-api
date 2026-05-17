@@ -44,6 +44,17 @@ pub struct LoginResponse {
     pub user: UserPublic,
 }
 
+/// Payload del endpoint `GET /auth/verify`
+#[derive(Debug, Deserialize)]
+pub struct VerifyEmailQuery {
+    pub token: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyEmailResponse {
+    pub message: String,
+}
+
 /// Modelo de usuario para la base de datos
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {
@@ -52,6 +63,15 @@ pub struct User {
     pub password_hash: String,
     pub role: UserRole,
     pub verified: bool,
+}
+
+/// Modelo de verificación de email para la base de datos
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct VerificationToken {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub token: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]

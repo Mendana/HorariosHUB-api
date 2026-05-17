@@ -7,6 +7,7 @@ stages:
 variables:
   CARGO_TERM_COLOR: always
   SQLX_OFFLINE: "true"
+  CARGO_HOME: "${CI_PROJECT_DIR}/.cargo"
 
 default:
   image: rust:1.88
@@ -16,9 +17,6 @@ cache:
   paths:
     - target/
     - .cargo/
-    - /usr/local/cargo/registry/
-    - /usr/local/cargo/git/
-    - /usr/local/cargo/bin/ # cache sqlx-cli binary
 
 before_script:
   - rustup component add rustfmt clippy
@@ -38,6 +36,14 @@ clippy:
 
 sqlx:
   stage: checks
+  services:
+    - postgres:16-alpine
+  variables:
+    SQLX_OFFLINE: "false"
+    POSTGRES_USER: horariosUser
+    POSTGRES_PASSWORD: horariosUser_dev
+    POSTGRES_DB: horarioshub
+    DATABASE_URL: "postgres://horariosUser:horariosUser_dev@postgres/horarioshub"
   script:
     - cargo install sqlx-cli --no-default-features --features rustls,postgres
     - cargo sqlx prepare --check

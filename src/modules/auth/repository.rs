@@ -1,16 +1,64 @@
 use super::models::{User, UserRole};
-use crate::errors::AppError;
+use crate::{errors::AppError, modules::auth::models::VerificationToken};
 use sqlx::PgPool;
 
 #[async_trait::async_trait]
 pub trait UserRepository: Send + Sync {
+    /// Busca un usuario por su email
+    ///
+    /// Devuelve `None` si no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError>;
+
+    /// Inserta un nuevo usuario en la base de datos y devuelve el usuario creado
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la inserción en la base de datos (e.g. conexión, constraints)
     async fn create(
         &self,
         email: &str,
         password_hash: &str,
         role: UserRole,
     ) -> Result<User, AppError>;
+
+    /// Crea un token de verificación para el usuario con el ID dado
+    /// Devuelve el token generado
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la inserción en la base de datos (e.g. conexión)
+    /// - [`AppError::NotFound`] si no existe un usuario con el ID dado
+    /// - [`AppError::Conflict`] si el usuario ya está verificado
+    async fn create_verification_token(&self, user_id: uuid::Uuid) -> Result<String, AppError>;
+
+    /// Busca un token de verificación por su valor y devuelve el token encontrado
+    /// Devuelve `None` si no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos (e.g. conexión)
+    /// - [`AppError::NotFound`] si no existe un token con el valor dado
+    async fn find_verification_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<VerificationToken>, AppError>;
+
+    /// Marca al usuario con el ID dado como verificado
+    /// Devuelve `Ok(())` si la operación fue exitosa
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la actualización en la base de datos
+    /// - [`AppError::NotFound`] si no existe un usuario con el ID dado
+    /// - [`AppError::Conflict`] si el usuario ya está verificado
+    async fn mark_user_as_verified(&self, user_id: uuid::Uuid) -> Result<(), AppError>;
+
+    /// Elimina el token de verificación con el ID dado de la base de datos
+    /// Devuelve `Ok(())` si la operación fue exitosa o si el token no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la eliminación en la base de datos (e.g. conexión)
+    /// - [`AppError::NotFound`] si no existe un token con el ID dado
+    async fn delete_verification_token(&self, token_id: uuid::Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgUserRepository {
@@ -25,12 +73,6 @@ impl PgUserRepository {
 
 #[async_trait::async_trait]
 impl UserRepository for PgUserRepository {
-    /// Busca un usuario por su email
-    ///
-    /// Devuelve `None` si no existe
-    ///
-    /// # Errores:
-    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as!(
             User,
@@ -47,10 +89,6 @@ impl UserRepository for PgUserRepository {
         Ok(user)
     }
 
-    /// Inserta un nuevo usuario en la base de datos y devuelve el usuario creado
-    ///
-    /// # Errores:
-    /// - [`AppError::Internal`] para errores en la inserción en la base de datos (e.g. conexión, constraints)
     async fn create(
         &self,
         email: &str,
@@ -77,5 +115,81 @@ impl UserRepository for PgUserRepository {
         .await?;
 
         Ok(user)
+    }
+
+    async fn create_verification_token(&self, user_id: uuid::Uuid) -> Result<String, AppError> {
+        // Verificar que el usuario existe y no está verificado
+        let user = sqlx::query!("SELECT verified FROM users WHERE id = $1", user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if user.verified {
+            return Err(AppError::Conflict("El usuario ya está verificado".into()));
+        }
+
+        // Generar token
+        let token = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query!(
+            r#"
+            INSERT INTO verification_tokens (user_id, token, expires_at)
+            VALUES ($1, $2, NOW() + INTERVAL '24 hours')
+            "#,
+            user_id,
+            token
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(token)
+    }
+
+    async fn find_verification_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<VerificationToken>, AppError> {
+        let record = sqlx::query_as!(
+            VerificationToken,
+            r#"
+            SELECT id, user_id, token, expires_at
+            FROM verification_tokens
+            WHERE token = $1
+            "#,
+            token
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    async fn mark_user_as_verified(&self, user_id: uuid::Uuid) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE users
+            SET verified = true
+            WHERE id = $1 AND verified = false
+            "#,
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn delete_verification_token(&self, token_id: uuid::Uuid) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            DELETE FROM verification_tokens
+            WHERE id = $1
+            "#,
+            token_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
