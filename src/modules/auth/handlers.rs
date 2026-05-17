@@ -3,8 +3,8 @@ use super::models::{RegisterRequest, RegisterResponse, UserPublic};
 use super::service;
 use crate::errors::AppError;
 use crate::modules::auth::models::{
-    LoginRequest, ResetPasswordRequest, ResetPasswordResponse, VerifyEmailQuery,
-    VerifyEmailResponse,
+    LoginRequest, RecoverPasswordRequest, RecoverPasswordResponse, ResetPasswordRequest,
+    ResetPasswordResponse, VerifyEmailQuery, VerifyEmailResponse,
 };
 use crate::{AppState, errors::ApiResult};
 use axum::extract::Query;
@@ -101,6 +101,24 @@ pub async fn reset_password(
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
     let response = service::reset_password(state.user_repo.as_ref(), payload).await?;
+
+    Ok(Json(response))
+}
+
+/// POST /auth/recover
+///
+/// Envia un email de recuperación de contraseña al usuario
+#[tracing::instrument(skip(state), fields(email = %payload.email))]
+pub async fn recover_password(
+    State(state): State<AppState>,
+    Json(payload): Json<RecoverPasswordRequest>,
+) -> ApiResult<Json<RecoverPasswordResponse>> {
+    payload
+        .validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let response =
+        service::recover_password(state.user_repo.as_ref(), state.email.as_ref(), payload).await?;
 
     Ok(Json(response))
 }

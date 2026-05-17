@@ -4,6 +4,8 @@ mod common;
 mod login;
 #[path = "auth/me.rs"]
 mod me;
+#[path = "auth/recover.rs"]
+mod recover;
 #[path = "auth/register.rs"]
 mod register;
 #[path = "auth/reset_password.rs"]
