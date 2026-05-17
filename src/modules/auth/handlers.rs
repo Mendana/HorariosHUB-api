@@ -3,8 +3,8 @@ use super::models::{RegisterRequest, RegisterResponse, UserPublic};
 use super::service;
 use crate::errors::AppError;
 use crate::modules::auth::models::{
-    LoginRequest, RecoverPasswordRequest, RecoverPasswordResponse, ResetPasswordRequest,
-    ResetPasswordResponse, VerifyEmailQuery, VerifyEmailResponse,
+    LoginRequest, LogoutResponse, RecoverPasswordRequest, RecoverPasswordResponse,
+    ResetPasswordRequest, ResetPasswordResponse, VerifyEmailQuery, VerifyEmailResponse,
 };
 use crate::{AppState, errors::ApiResult};
 use axum::extract::Query;
@@ -103,6 +103,30 @@ pub async fn reset_password(
     let response = service::reset_password(state.user_repo.as_ref(), payload).await?;
 
     Ok(Json(response))
+}
+
+#[tracing::instrument(skip(state,auth), fields(email = %auth.claims.email))]
+pub async fn logout(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> ApiResult<impl IntoResponse> {
+    let mut headers = HeaderMap::new();
+
+    let cookie_value = format!(
+        "access_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
+    );
+
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie_value).map_err(|e| AppError::Internal(e.into()))?,
+    );
+
+    Ok((
+        headers,
+        Json(LogoutResponse {
+            message: "Sesión cerrada".into(),
+        }),
+    ))
 }
 
 /// POST /auth/recover

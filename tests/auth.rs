@@ -2,6 +2,8 @@ mod common;
 
 #[path = "auth/login.rs"]
 mod login;
+#[path = "auth/logout.rs"]
+mod logout;
 #[path = "auth/me.rs"]
 mod me;
 #[path = "auth/recover.rs"]
