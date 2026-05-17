@@ -99,6 +99,20 @@ cargo test --all-features --all-targets
 
 ---
 
+## BASE DE DATOS
+
+Al levantar el entorno de esta manera, la base de datos viene con 3 usuarios ya verificados:
+
+```
+
+alumno@uniovi.es pass con role alumno
+
+profesor@uniovi.es pass con role professor
+
+admin@uniovi.es pass con role admin
+
+```
+
 ## Migraciones y sqlx
 
 ### Crear una migración nueva
