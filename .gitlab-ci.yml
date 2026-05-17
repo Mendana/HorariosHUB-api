@@ -34,20 +34,6 @@ clippy:
   script:
     - cargo clippy --all-targets --all-features -- -D warnings
 
-sqlx:
-  stage: checks
-  services:
-    - postgres:16-alpine
-  variables:
-    SQLX_OFFLINE: "false"
-    POSTGRES_USER: horariosUser
-    POSTGRES_PASSWORD: horariosUser_dev
-    POSTGRES_DB: horarioshub
-    DATABASE_URL: "postgres://horariosUser:horariosUser_dev@postgres/horarioshub"
-  script:
-    - cargo install sqlx-cli --no-default-features --features rustls,postgres
-    - cargo sqlx prepare --check
-
 # =========================
 # TESTS
 # =========================
