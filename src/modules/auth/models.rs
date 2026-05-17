@@ -70,6 +70,18 @@ pub struct ResetPasswordResponse {
     pub message: String,
 }
 
+/// Payload del endpoint `POST /auth/recover`
+#[derive(Debug, Deserialize, Validate)]
+pub struct RecoverPasswordRequest {
+    #[validate(email(message = "Email inválido"))]
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RecoverPasswordResponse {
+    pub message: String,
+}
+
 // --- Modelos de base de datos ---
 
 /// Modelo de usuario para la base de datos

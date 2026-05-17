@@ -5,10 +5,11 @@ use crate::config::Config;
 use crate::errors::AppError;
 use crate::jwt;
 use crate::modules::auth::models::{
-    LoginRequest, LoginResponse, ResetPasswordRequest, ResetPasswordResponse, UserPublic,
-    VerifyEmailResponse,
+    LoginRequest, LoginResponse, RecoverPasswordRequest, RecoverPasswordResponse,
+    ResetPasswordRequest, ResetPasswordResponse, UserPublic, VerifyEmailResponse,
 };
 use crate::modules::auth::repository::UserRepository;
+use crate::services::email::service::EmailService;
 
 /// Registra un nuevo usuario en el sistema
 ///
@@ -163,6 +164,52 @@ pub async fn reset_password(
 
     Ok(ResetPasswordResponse {
         message: "Contraseña actualizada".into(),
+    })
+}
+
+/// Inicia el proceso de recuperación de contraseña para un email dado
+///
+/// # Flujo:
+/// 1. Busca el usuario por email
+/// 2. Si el usuario existe, genera un token de recuperación de contraseña
+/// 3. Envía un email al usuario con el enlace de recuperación (contiene el token)
+/// 4. Si el email no existe, no hace nada (para evitar revelar qué emails están registrados en el sistema)
+/// 5. Devuelve un mensaje genérico indicando que se ha enviado un enlace de recuperación (independientemente de si el email existe o no)
+///
+/// # Errores:
+/// - [`AppError::Internal`] para errores en la base de datos o en el envío de emails
+pub async fn recover_password(
+    repo: &dyn UserRepository,
+    email_svc: &dyn EmailService,
+    payload: RecoverPasswordRequest,
+) -> Result<RecoverPasswordResponse, AppError> {
+    let email = payload.email.trim().to_lowercase();
+
+    let user = match repo.find_by_email(&email).await? {
+        Some(user) => user,
+        None => {
+            tracing::debug!(
+            email = %email,
+            "Recover solicitado para email no registrado"
+            );
+            return Ok(RecoverPasswordResponse {
+                message: "Si el email existe, se ha enviado un enlace de recuperación".into(),
+            });
+        }
+    };
+
+    let token = repo.create_password_reset_token(user.id).await?;
+
+    if let Err(e) = email_svc.send_password_reset_email(&email, &token).await {
+        tracing::error!(
+        email = %email,
+        error = ?e,
+        "No se pudo enviar el email de recuperación"
+        );
+    }
+
+    Ok(RecoverPasswordResponse {
+        message: "Si el email existe, se ha enviado un enlace de recuperación".into(),
     })
 }
 
