@@ -1,4 +1,4 @@
-use crate::common::{login_user, setup};
+use crate::common::{login_user, setup, verify_user};
 use axum::http::StatusCode;
 use serde_json::json;
 
@@ -13,6 +13,7 @@ async fn get_auth_me_devuelve_200_con_usuario_autenticado() {
         .json(&json!({ "email": email, "password": password }))
         .await;
 
+    verify_user(&ctx.pool, email).await;
     let token = login_user(&ctx.server, email, password).await;
 
     let response = ctx
@@ -74,6 +75,7 @@ async fn get_auth_me_devuelve_200_con_datos_correctos() {
         .json(&json!({ "email": email, "password": password }))
         .await;
 
+    verify_user(&ctx.pool, email).await;
     let token = login_user(&ctx.server, email, password).await;
 
     let response = ctx
@@ -125,6 +127,8 @@ async fn get_auth_me_con_multiples_usuarios() {
         .json(&json!({ "email": email2, "password": password }))
         .await;
 
+    verify_user(&ctx.pool, email1).await;
+    verify_user(&ctx.pool, email2).await;
     let token1 = login_user(&ctx.server, email1, password).await;
     let token2 = login_user(&ctx.server, email2, password).await;
 

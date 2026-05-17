@@ -18,10 +18,7 @@ async fn get_verify_devuelve_200_con_token_valido() {
     .await
     .unwrap();
 
-    let response = ctx
-        .server
-        .get(&format!("/auth/verify?token={}", token))
-        .await;
+    let response = ctx.server.get(&format!("/auth/verify?token={token}")).await;
 
     response.assert_status_ok();
     let body: serde_json::Value = response.json();
@@ -88,14 +85,9 @@ async fn get_verify_devuelve_400_si_token_ya_usado() {
     .await
     .unwrap();
 
-    ctx.server
-        .get(&format!("/auth/verify?token={}", token))
-        .await;
+    ctx.server.get(&format!("/auth/verify?token={token}")).await;
 
-    let response = ctx
-        .server
-        .get(&format!("/auth/verify?token={}", token))
-        .await;
+    let response = ctx.server.get(&format!("/auth/verify?token={token}")).await;
 
     response.assert_status(StatusCode::BAD_REQUEST);
 }
@@ -121,10 +113,7 @@ async fn get_verify_devuelve_400_si_token_expirado() {
     .await
     .unwrap();
 
-    let response = ctx
-        .server
-        .get(&format!("/auth/verify?token={}", token))
-        .await;
+    let response = ctx.server.get(&format!("/auth/verify?token={token}")).await;
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let body: serde_json::Value = response.json();

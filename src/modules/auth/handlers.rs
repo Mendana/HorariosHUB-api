@@ -32,15 +32,13 @@ pub async fn register(
 
 /// GET /auth/me
 #[tracing::instrument(
-    skip(auth),                     // No logear el auth completo
-    fields(email = %auth.claims.email)  // Logear el email
+    skip(auth),
+    fields(email = %auth.user.email)
 )]
 pub async fn get_user(auth: AuthenticatedUser) -> ApiResult<(StatusCode, Json<UserPublic>)> {
-    // El extractor ya validó el JWT y extrajo los Claims
-    // Aquí sacas la información directamente del token
     let response = UserPublic {
-        email: auth.claims.email.clone(),
-        role: auth.claims.role.clone(),
+        email: auth.user.email.clone(),
+        role: auth.user.role.clone(),
     };
 
     Ok((StatusCode::OK, Json(response)))
@@ -108,7 +106,7 @@ pub async fn reset_password(
 /// POST /auth/logout
 ///
 /// Elimina la cookie de autenticación para cerrar la sesión del usuario
-#[tracing::instrument(skip(_state,auth), fields(email = %auth.claims.email))]
+#[tracing::instrument(skip(_state,auth), fields(email = %auth.user.email))]
 pub async fn logout(
     State(_state): State<AppState>,
     auth: AuthenticatedUser,

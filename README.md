@@ -137,19 +137,13 @@ sqlx migrate revert --database-url postgres://horariosUser:horariosUser_dev@loca
 
 ### Regenerar `.sqlx` (offline mode)
 
-El directorio `.sqlx` contiene los metadatos de las queries compiladas, necesario para que la CI pueda compilar sin base de datos (`SQLX_OFFLINE=true`). Hay que regenerarlo cada vez que se añade o modifica una query:
+El directorio `.sqlx` contiene los metadatos de las queries compiladas, necesario para que la CI pueda compilar sin base de datos (`SQLX_OFFLINE=true`). Hay que regenerarlo cada vez que se añade o modifica una query, incluyendo las de los tests:
 
 ```bash
-cargo sqlx prepare --database-url postgres://horariosUser:horariosUser_dev@localhost:5432/horarioshub
+cargo sqlx prepare -- --all-targets
 ```
 
-> **Importante:** ejecuta esto antes de hacer commit si has tocado queries SQL. La CI valida con `sqlx prepare --check` y fallará si el `.sqlx` no está actualizado.
-
-Confirma que el `.sqlx` está sincronizado con el código actual (lo que hace la CI):
-
-```bash
-cargo sqlx prepare --check --database-url postgres://horariosUser:horariosUser_dev@localhost:5432/horarioshub
-```
+> **Importante:** ejecuta esto antes de hacer commit si has tocado queries SQL. La CI compila con `SQLX_OFFLINE=true` y fallará si el `.sqlx` no está actualizado o le faltan queries de los tests.
 
 > Las migraciones se aplican automáticamente al arrancar la aplicación.
 

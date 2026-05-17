@@ -57,7 +57,6 @@ pub async fn register(
     repo.create_verification_token(user.id).await?;
 
     Ok(RegisterResponse {
-        id: user.id,
         email: user.email,
         role: user.role,
     })
@@ -260,6 +259,10 @@ mod tests {
 
     #[async_trait]
     impl UserRepository for MockUserRepository {
+        async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+            Ok(None)
+        }
+
         async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
             if self.existing_email.as_deref() == Some(email) {
                 Ok(Some(User {
@@ -431,6 +434,10 @@ mod tests {
 
     #[async_trait]
     impl UserRepository for MockUserRepositoryLogin {
+        async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+            Ok(None)
+        }
+
         async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
             if self.existing_email.as_deref() == Some(email) {
                 Ok(Some(User {
@@ -641,6 +648,10 @@ mod tests {
 
         #[async_trait]
         impl UserRepository for MockUserRepositoryExpired {
+            async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
             async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
                 Ok(None)
             }
@@ -723,6 +734,10 @@ mod tests {
 
         #[async_trait]
         impl UserRepository for MockUserRepositoryInvalidToken {
+            async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
             async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
                 Ok(None)
             }
@@ -818,6 +833,10 @@ mod tests {
 
         #[async_trait]
         impl UserRepository for MockUserRepositoryResetExpired {
+            async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
             async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
                 Ok(None)
             }
@@ -991,6 +1010,10 @@ mod tests {
 
         #[async_trait]
         impl UserRepository for MockUserRepositoryResetInvalid {
+            async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+                Ok(None)
+            }
+
             async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
                 Ok(None)
             }
