@@ -8,6 +8,12 @@ pub struct Config {
     pub jwt_access_ttl_seconds: u64,
     pub server_port: u16,
     pub rust_env: Environment,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_user: String,
+    pub smtp_password: String,
+    pub smtp_from: String,
+    pub base_url: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +42,14 @@ impl Config {
                 "production" => Environment::Production,
                 _ => Environment::Development,
             },
+            smtp_host: required("SMTP_HOST")?,
+            smtp_port: env::var("SMTP_PORT")
+                .unwrap_or_else(|_| "587".into())
+                .parse()?,
+            smtp_user: required("SMTP_USER")?,
+            smtp_password: required("SMTP_PASSWORD")?,
+            smtp_from: required("SMTP_FROM")?,
+            base_url: required("BASE_URL")?,
         })
     }
 

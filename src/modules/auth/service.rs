@@ -417,6 +417,12 @@ mod tests {
             jwt_access_ttl_seconds: 900,
             server_port: 3001,
             rust_env: crate::config::Environment::Development,
+            smtp_host: "localhost".to_string(),
+            smtp_port: 1025,
+            smtp_user: "test".to_string(),
+            smtp_password: "test".to_string(),
+            smtp_from: "no-reply@horarioshub.com".to_string(),
+            base_url: "http://localhost:3000".to_string(),
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -449,6 +455,12 @@ mod tests {
             jwt_access_ttl_seconds: 900,
             server_port: 3001,
             rust_env: crate::config::Environment::Development,
+            smtp_host: "localhost".to_string(),
+            smtp_port: 1025,
+            smtp_user: "test".to_string(),
+            smtp_password: "test".to_string(),
+            smtp_from: "no-reply@horarioshub.com".to_string(),
+            base_url: "http://localhost:3000".to_string(),
         };
         let payload = LoginRequest {
             email: "otro@uniovi.es".to_string(),
@@ -478,6 +490,12 @@ mod tests {
             jwt_access_ttl_seconds: 900,
             server_port: 3001,
             rust_env: crate::config::Environment::Development,
+            smtp_host: "localhost".to_string(),
+            smtp_port: 1025,
+            smtp_user: "test".to_string(),
+            smtp_password: "test".to_string(),
+            smtp_from: "no-reply@horarioshub.com".to_string(),
+            base_url: "http://localhost:3000".to_string(),
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
