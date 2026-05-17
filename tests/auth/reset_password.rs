@@ -12,20 +12,18 @@ async fn setup_reset_token(pool: &sqlx::PgPool, email: &str) -> String {
     // Si no existe, insertar directamente para el test
     let user_id = match user_id {
         Some(id) => id,
-        None => {
-            sqlx::query_scalar!(
-                r#"
+        None => sqlx::query_scalar!(
+            r#"
                 INSERT INTO users (email, password_hash, role)
                 VALUES ($1, $2, 'student')
                 RETURNING id
                 "#,
-                email,
-                bcrypt::hash("password123", 4).unwrap(), // cost 4 — más rápido en tests
-            )
-            .fetch_one(pool)
-            .await
-            .unwrap()
-        }
+            email,
+            bcrypt::hash("Password123", 4).unwrap(),
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap(),
     };
 
     // Crear token de reset directamente en BBDD
@@ -138,19 +136,77 @@ async fn post_reset_password_devuelve_422_si_password_corta() {
 }
 
 #[tokio::test]
+async fn post_reset_password_devuelve_422_si_password_sin_letras() {
+    let ctx = setup().await;
+
+    let token = setup_reset_token(&ctx.pool, "reset_val@uniovi.es").await;
+
+    let response = ctx
+        .server
+        .post("/auth/reset-password")
+        .json(&json!({ "token": token, "new_password": "12345678" }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn post_reset_password_devuelve_422_si_password_sin_numeros() {
+    let ctx = setup().await;
+
+    let token = setup_reset_token(&ctx.pool, "reset_val@uniovi.es").await;
+
+    let response = ctx
+        .server
+        .post("/auth/reset-password")
+        .json(&json!({ "token": token, "new_password": "PasswordA" }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+#[tokio::test]
+async fn post_reset_password_devuelve_422_si_password_sin_mayusculas() {
+    let ctx = setup().await;
+
+    let token = setup_reset_token(&ctx.pool, "reset_val@uniovi.es").await;
+
+    let response = ctx
+        .server
+        .post("/auth/reset-password")
+        .json(&json!({ "token": token, "new_password": "password123" }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+#[tokio::test]
+async fn post_reset_password_devuelve_422_si_password_sin_minusculas() {
+    let ctx = setup().await;
+
+    let token = setup_reset_token(&ctx.pool, "reset_val@uniovi.es").await;
+
+    let response = ctx
+        .server
+        .post("/auth/reset-password")
+        .json(&json!({ "token": token, "new_password": "PASSWORD123" }))
+        .await;
+
+    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
 async fn post_reset_password_permite_login_con_nueva_contrasena() {
     let ctx = setup().await;
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "flow@uniovi.es", "password": "oldpassword123" }))
+        .json(&json!({ "email": "flow@uniovi.es", "password": "Oldpassword123" }))
         .await;
 
     let token = setup_reset_token(&ctx.pool, "flow@uniovi.es").await;
 
     ctx.server
         .post("/auth/reset-password")
-        .json(&json!({ "token": token, "new_password": "newpassword456" }))
+        .json(&json!({ "token": token, "new_password": "Newpassword456" }))
         .await
         .assert_status_ok();
 
@@ -158,7 +214,7 @@ async fn post_reset_password_permite_login_con_nueva_contrasena() {
     let response = ctx
         .server
         .post("/auth/login")
-        .json(&json!({ "email": "flow@uniovi.es", "password": "newpassword456" }))
+        .json(&json!({ "email": "flow@uniovi.es", "password": "Newpassword456" }))
         .await;
 
     response.assert_status_ok();
@@ -172,14 +228,14 @@ async fn post_reset_password_invalida_contrasena_anterior() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "oldpwd@uniovi.es", "password": "oldpassword123" }))
+        .json(&json!({ "email": "oldpwd@uniovi.es", "password": "Oldpassword123" }))
         .await;
 
     let token = setup_reset_token(&ctx.pool, "oldpwd@uniovi.es").await;
 
     ctx.server
         .post("/auth/reset-password")
-        .json(&json!({ "token": token, "new_password": "newpassword456" }))
+        .json(&json!({ "token": token, "new_password": "Newpassword456" }))
         .await
         .assert_status_ok();
 
@@ -187,7 +243,7 @@ async fn post_reset_password_invalida_contrasena_anterior() {
     let response = ctx
         .server
         .post("/auth/login")
-        .json(&json!({ "email": "oldpwd@uniovi.es", "password": "oldpassword123" }))
+        .json(&json!({ "email": "oldpwd@uniovi.es", "password": "Oldpassword123" }))
         .await;
 
     response.assert_status(StatusCode::UNAUTHORIZED);

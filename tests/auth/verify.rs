@@ -8,7 +8,7 @@ async fn get_verify_devuelve_200_con_token_valido() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "verify_ok@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "verify_ok@uniovi.es", "password": "Password123" }))
         .await;
 
     let token = sqlx::query_scalar!(
@@ -78,7 +78,7 @@ async fn get_verify_devuelve_400_si_token_ya_usado() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "verify_reuse@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "verify_reuse@uniovi.es", "password": "Password123" }))
         .await;
 
     let token = sqlx::query_scalar!(
@@ -106,7 +106,7 @@ async fn get_verify_devuelve_400_si_token_expirado() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "verify_exp@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "verify_exp@uniovi.es", "password": "Password123" }))
         .await;
 
     sqlx::query!("UPDATE verification_tokens SET expires_at = NOW() - INTERVAL '1 hour'")

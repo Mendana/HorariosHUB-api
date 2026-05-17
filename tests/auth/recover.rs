@@ -8,7 +8,7 @@ async fn post_recover_devuelve_200_si_email_existe() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "recover_ok@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "recover_ok@uniovi.es", "password": "Password123" }))
         .await;
 
     let response = ctx
@@ -80,7 +80,7 @@ async fn post_recover_invalida_token_anterior_si_se_pide_de_nuevo() {
 
     ctx.server
         .post("/auth/register")
-        .json(&json!({ "email": "recover_twice@uniovi.es", "password": "password123" }))
+        .json(&json!({ "email": "recover_twice@uniovi.es", "password": "Password123" }))
         .await;
 
     ctx.server
