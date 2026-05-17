@@ -15,4 +15,5 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/register", post(handlers::register))
         .route("/auth/me", get(handlers::get_user))
         .route("/auth/login", post(handlers::login))
+        .route("/auth/verify", get(handlers::verify_email))
 }

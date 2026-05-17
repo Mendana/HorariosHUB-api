@@ -2,8 +2,9 @@ use super::middleware::AuthenticatedUser;
 use super::models::{RegisterRequest, RegisterResponse, UserPublic};
 use super::service;
 use crate::errors::AppError;
-use crate::modules::auth::models::LoginRequest;
+use crate::modules::auth::models::{LoginRequest, VerifyEmailQuery, VerifyEmailResponse};
 use crate::{AppState, errors::ApiResult};
+use axum::extract::Query;
 use axum::http::{HeaderMap, HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::{Json, extract::State, http::StatusCode};
@@ -69,4 +70,17 @@ pub async fn login(
     );
 
     Ok((headers, Json(response)))
+}
+
+/// GET /auth/verify-email?token=abc123
+///
+/// Verifica el email del usuario utilizando un token de verificación
+#[tracing::instrument(skip(state))]
+pub async fn verify_email(
+    State(state): State<AppState>,
+    Query(query): Query<VerifyEmailQuery>,
+) -> ApiResult<Json<VerifyEmailResponse>> {
+    let response = service::verify_email(state.user_repo.as_ref(), &query.token).await?;
+
+    Ok(Json(response))
 }

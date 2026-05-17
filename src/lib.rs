@@ -77,7 +77,7 @@ pub async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn create_test_app(db_url: &str) -> axum::Router {
+pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
     let pool = db::create_pool(db_url)
         .await
         .expect("No se pudo conectar a la BBDD de test");
@@ -91,11 +91,13 @@ pub async fn create_test_app(db_url: &str) -> axum::Router {
     let user_repo = Arc::new(PgUserRepository::new((*pool).clone()));
 
     let state = AppState {
-        pool,
+        pool: pool.clone(),
         user_repo,
         cache: Arc::new(cache::MokaCache::new(100, 60)),
         config: Arc::new(config::Config::load().expect("Config inválida")),
     };
 
-    modules::routes().with_state(state)
+    let app = modules::routes().with_state(state);
+    let pool_for_tests = (*pool).clone();
+    (app, pool_for_tests)
 }

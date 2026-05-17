@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO verification_tokens (user_id, token, expires_at)\n            VALUES ($1, $2, NOW() + INTERVAL '24 hours')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56686972dd1f7e353eb5aab76ffbb41dd560a22186ccf4a445f29ee16facefc8"
+}
