@@ -7,13 +7,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir src && echo "fn main() {}" > src/main.rs && echo "" > src/lib.rs
 RUN cargo build --release
-RUN rm src/main.rs
+RUN rm src/main.rs src/lib.rs
 
 COPY src ./src
 COPY migrations ./migrations
-RUN touch src/main.rs
+RUN touch src/main.rs src/lib.rs
 RUN cargo build --release
 
 # Imagen final
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/pceo-backend .
+COPY --from=builder /app/target/release/horarioshub-api .
 COPY --from=builder /app/migrations ./migrations
 
 # Usuario sin privilegios
