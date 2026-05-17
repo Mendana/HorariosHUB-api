@@ -90,8 +90,7 @@ impl EmailService for SmtpEmailService {
         let verification_link = format!("{}/verify?token={}", self.base_url, token);
         let subject = "Verificación de cuenta";
         let body = format!(
-            "Hola,\n\nPor favor haz clic en el siguiente enlace para verificar tu cuenta:\n{}\n\nGracias.",
-            verification_link
+            "Hola,\n\nPor favor haz clic en el siguiente enlace para verificar tu cuenta:\n{verification_link}\n\nGracias."
         );
 
         self.send_notification(to, subject, &body).await
