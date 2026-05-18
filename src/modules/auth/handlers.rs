@@ -26,7 +26,8 @@ pub async fn register(
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
-    let response = service::register(state.user_repo.as_ref(), payload).await?;
+    let response =
+        service::register(state.user_repo.as_ref(), state.email.as_ref(), payload).await?;
     Ok((StatusCode::CREATED, Json(response)))
 }
 

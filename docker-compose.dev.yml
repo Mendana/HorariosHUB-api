@@ -1,8 +1,10 @@
 services:
   db:
-    image: horariospceo.ingenieriainformatica.uniovi.es:5050/horarioshub/docker-images/horarioshub-db-populada:latest
-    env_file:
-      - .env
+    image: postgres:16
+    environment:
+      POSTGRES_USER: horariosUser
+      POSTGRES_PASSWORD: horariosUser_dev
+      POSTGRES_DB: horarioshub
     ports:
       - "5432:5432"
     volumes:

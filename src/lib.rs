@@ -4,6 +4,7 @@ pub mod db;
 pub mod errors;
 pub mod jwt;
 pub mod modules;
+pub mod seed;
 pub mod services;
 
 use axum::Router;
@@ -51,6 +52,11 @@ pub async fn run() -> anyhow::Result<()> {
     // 4. Migraciones automáticas al arrancar
     sqlx::migrate!("./migrations").run(&pool).await?;
     tracing::info!("Migraciones aplicadas");
+
+    // 4b. Seed de desarrollo
+    if !config.is_production() {
+        seed::run(&pool).await?;
+    }
 
     // 5. Servicio de email
     let email = Arc::new(SmtpEmailService::new(
