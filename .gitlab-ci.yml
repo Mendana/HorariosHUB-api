@@ -18,15 +18,13 @@ workflow:
 
 default:
   image: rust:1.88
-
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - target/
-    - .cargo/
-
-before_script:
-  - rustup component add rustfmt clippy
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - target/
+      - .cargo/
+  before_script:
+    - rustup component add rustfmt clippy
 
 # =========================
 # CHECKS (solo en MR)
@@ -66,13 +64,13 @@ test:
   services:
     - name: docker:28-dind
       alias: docker
-      command: ["--insecure-registry=horariospceo.ingenieriainformatica.uniovi.es:5050"]  # ← añade esto
+      command: ["--insecure-registry=horariospceo.ingenieriainformatica.uniovi.es:5050"]
   variables:
     DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
     DOCKER_TLS_VERIFY: 1
     DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
-    FF_NETWORK_PER_BUILD: "true"   # ← añade esto
+    FF_NETWORK_PER_BUILD: "false"  # ← desactivado para que DinD alcance el registry
 
 # =========================
 # DOCKER PUSH (solo al mergear a main)
@@ -80,12 +78,8 @@ test:
 docker-push:
   extends: .docker-base
   stage: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_TLS_VERIFY: 1
-    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
   before_script:
+    - until docker info; do echo "Waiting for Docker..."; sleep 2; done
     - echo "$CI_REGISTRY_PASSWORD" |
       docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
