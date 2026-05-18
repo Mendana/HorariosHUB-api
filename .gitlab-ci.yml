@@ -1,0 +1,90 @@
+stages:
+  - checks
+  - test
+  - docker
+
+variables:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: "true"
+  CARGO_HOME: "${CI_PROJECT_DIR}/.cargo"
+
+# Evita pipelines duplicadas: si hay MR abierto, solo corre la pipeline de MR
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+default:
+  image: rust:1.88
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - target/
+    - .cargo/
+
+before_script:
+  - rustup component add rustfmt clippy
+
+# =========================
+# CHECKS (solo en MR)
+# =========================
+fmt:
+  stage: checks
+  script:
+    - cargo fmt --all -- --check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+clippy:
+  stage: checks
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# =========================
+# TESTS (solo en MR)
+# =========================
+test:
+  stage: test
+  script:
+    - cargo test --all-features --all-targets
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# =========================
+# DOCKER SHARED CONFIG
+# =========================
+.docker-base:
+  image: docker:28
+  before_script: []
+  tags:
+    - docker-dind
+  services:
+    - name: docker:28-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+
+# =========================
+# DOCKER PUSH (solo al mergear a main)
+# =========================
+docker-push:
+  extends: .docker-base
+  stage: docker
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" |
+      docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker build -f docker/backend.Dockerfile -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"

@@ -1,93 +1,167 @@
-# HorariosHUB-api
+# horarioshub-api
 
+API REST del backend de HorariosHub. Construida en Rust con [Axum](https://github.com/tokio-rs/axum), PostgreSQL (via sqlx) y autenticación JWT. Gestiona usuarios, autenticación y horarios académicos.
 
+## Requisitos
 
-## Getting started
+- Rust 1.88+ (`rustup update stable`)
+- Docker y Docker Compose
+- sqlx-cli (solo para gestionar migraciones en local):
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://horariospceo.ingenieriainformatica.uniovi.es/git/horarioshub/horarioshub-api.git
-git branch -M main
-git push -uf origin main
+```bash
+cargo install sqlx-cli --no-default-features --features rustls,postgres
 ```
 
-## Integrate with your tools
+---
 
-* [Set up project integrations](https://horariospceo.ingenieriainformatica.uniovi.es/git/horarioshub/horarioshub-api/-/settings/integrations)
+## Stack
 
-## Collaborate with your team
+- **Rust** · Axum, Tower, sqlx, tokio
+- **PostgreSQL 16** como base de datos principal
+- **Moka** para caché en memoria
+- **lettre** para envío de correos (SMTP)
+- **Docker** para desarrollo y despliegue
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+---
 
-## Test and Deploy
+## Variables de entorno
 
-Use the built-in continuous integration in GitLab.
+Copia el fichero de ejemplo y ajusta los valores:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```bash
+cp .env.example .env
+```
 
-***
+| Variable | Descripción |
+|---|---|
+| `DATABASE_URL` | URL de conexión a PostgreSQL |
+| `JWT_SECRET` | Clave secreta para firmar JWT (mínimo 32 caracteres) |
+| `JWT_ACCESS_TTL_SECONDS` | Duración del token de acceso en segundos |
+| `SERVER_PORT` | Puerto en el que escucha la API |
+| `RUST_LOG` | Nivel de log (`debug`, `info`, `warn`, `error`) |
+| `RUST_ENV` | Entorno de ejecución (`development` / `production`) |
+| `SMTP_HOST` | Servidor SMTP |
+| `SMTP_PORT` | Puerto SMTP |
+| `SMTP_USER` | Usuario SMTP |
+| `SMTP_PASSWORD` | Contraseña SMTP |
+| `SMTP_FROM` | Dirección y nombre del remitente |
+| `BASE_URL` | URL base pública de la aplicación (usada en enlaces de correo) |
 
-# Editing this README
+---
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Desarrollo
 
-## Suggestions for a good README
+### Levantar el entorno
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```bash
+# Base de datos en segundo plano
+docker compose -f docker-compose.dev.yml up db -d
 
-## Name
-Choose a self-explaining name for your project.
+# API con hot-reload (cargo-watch dentro del contenedor)
+docker compose -f docker-compose.dev.yml up backend
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+O todo de una vez:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+docker compose -f docker-compose.dev.yml up
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Compilar y ejecutar en local
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```bash
+# Debug
+cargo build
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Release
+cargo build --release
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# Ejecutar directamente
+cargo run
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+---
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## Comandos de calidad de código
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Estos son los checks que ejecuta la CI. Deben pasar antes de abrir una MR.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+# Formato
+cargo fmt --all
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+# Linting (con warnings como errores, igual que CI)
+cargo clippy --all-targets --all-features -- -D warnings
 
-## License
-For open source projects, say how it is licensed.
+# Tests (requieren Docker en ejecución para los integration tests con testcontainers)
+cargo test --all-features --all-targets
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+---
+
+## BASE DE DATOS
+
+Al levantar el entorno de esta manera, la base de datos viene con 3 usuarios ya verificados:
+
+```
+
+alumno@uniovi.es pass con role alumno
+
+profesor@uniovi.es pass con role professor
+
+admin@uniovi.es pass con role admin
+
+```
+
+## Migraciones y sqlx
+
+### Crear una migración nueva
+
+```bash
+sqlx migrate add <nombre_descriptivo>
+```
+
+Genera dos ficheros en `migrations/` con el timestamp como prefijo.
+
+### Aplicar migraciones
+
+```bash
+sqlx migrate run --database-url postgres://horariosUser:horariosUser_dev@localhost:5432/horarioshub
+```
+
+### Revertir la última migración
+
+```bash
+sqlx migrate revert --database-url postgres://horariosUser:horariosUser_dev@localhost:5432/horarioshub
+```
+
+### Regenerar `.sqlx` (offline mode)
+
+El directorio `.sqlx` contiene los metadatos de las queries compiladas, necesario para que la CI pueda compilar sin base de datos (`SQLX_OFFLINE=true`). Hay que regenerarlo cada vez que se añade o modifica una query, incluyendo las de los tests:
+
+```bash
+cargo sqlx prepare -- --all-targets
+```
+
+> **Importante:** ejecuta esto antes de hacer commit si has tocado queries SQL. La CI compila con `SQLX_OFFLINE=true` y fallará si el `.sqlx` no está actualizado o le faltan queries de los tests.
+
+> Las migraciones se aplican automáticamente al arrancar la aplicación.
+
+---
+
+## Despliegue
+
+La imagen de producción se construye con `docker/backend.Dockerfile`, que usa un build multi-stage para producir un binario optimizado sobre `debian:bookworm-slim`.
+
+La CI publica automáticamente en el registry de GitLab cuando hay un commit en `main`:
+
+```
+registry.gitlab.com/<grupo>/<proyecto>:<commit-sha>
+registry.gitlab.com/<grupo>/<proyecto>:latest
+```
+
+Para construir la imagen de producción manualmente:
+
+```bash
+docker build -f docker/backend.Dockerfile -t horarioshub-api:latest .
+```

@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: horariosUser
+      POSTGRES_PASSWORD: horariosUser_dev
+      POSTGRES_DB: horarioshub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U horariosUser -d horarioshub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.dev.Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - cargo_cache:/usr/local/cargo
+      - target_cache:/app/target
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_dev_data:
+  cargo_cache:
+  target_cache:
