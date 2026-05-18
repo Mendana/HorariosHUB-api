@@ -23,6 +23,7 @@ use crate::services::email::service::EmailService;
 /// - [`AppError::Internal`] para errores en hashing o inserción en la base de datos
 pub async fn register(
     repo: &dyn UserRepository,
+    email_svc: &dyn EmailService,
     payload: RegisterRequest,
 ) -> Result<RegisterResponse, AppError> {
     if !password_is_strong(&payload.password) {
@@ -54,7 +55,15 @@ pub async fn register(
         .create(&email, &password_hash, UserRole::Student)
         .await?;
 
-    repo.create_verification_token(user.id).await?;
+    let token = repo.create_verification_token(user.id).await?;
+
+    if let Err(e) = email_svc.send_verification_email(&email, &token).await {
+        tracing::error!(
+            email = %email,
+            error = ?e,
+            "No se pudo enviar el email de verificacion"
+        );
+    }
 
     Ok(RegisterResponse {
         email: user.email,
@@ -249,6 +258,7 @@ mod tests {
         PasswordResetToken, RegisterRequest, User, UserRole, VerificationToken,
     };
     use crate::modules::auth::repository::UserRepository;
+    use crate::services::email::service::MockEmailService;
     use async_trait::async_trait;
     use uuid::Uuid;
 
@@ -345,6 +355,10 @@ mod tests {
         }
     }
 
+    fn mock_email() -> MockEmailService {
+        MockEmailService
+    }
+
     #[tokio::test]
     async fn register_ok() {
         let repo = MockUserRepository {
@@ -355,7 +369,7 @@ mod tests {
             password: "Password123".to_string(),
         };
 
-        let result = register(&repo, payload).await;
+        let result = register(&repo, &mock_email(), payload).await;
 
         assert!(result.is_ok());
         let response = result.unwrap();
@@ -373,7 +387,7 @@ mod tests {
             password: "Password123".to_string(),
         };
 
-        let result = register(&repo, payload).await.unwrap();
+        let result = register(&repo, &mock_email(), payload).await.unwrap();
         assert_eq!(result.email, "diego@uniovi.es");
     }
 
@@ -387,7 +401,7 @@ mod tests {
             password: "Password123".to_string(),
         };
 
-        let result = register(&repo, payload).await;
+        let result = register(&repo, &mock_email(), payload).await;
 
         assert!(matches!(result, Err(AppError::Conflict(_))));
     }
@@ -414,16 +428,16 @@ mod tests {
             password: "Pass1".to_string(),
         };
 
-        let result = register(&repo, no_uppercase_password).await;
+        let result = register(&repo, &mock_email(), no_uppercase_password).await;
         assert!(matches!(result, Err(AppError::Validation(_))));
 
-        let result = register(&repo, no_lowercase_password).await;
+        let result = register(&repo, &mock_email(), no_lowercase_password).await;
         assert!(matches!(result, Err(AppError::Validation(_))));
 
-        let result = register(&repo, no_numbers_password).await;
+        let result = register(&repo, &mock_email(), no_numbers_password).await;
         assert!(matches!(result, Err(AppError::Validation(_))));
 
-        let result = register(&repo, short_password).await;
+        let result = register(&repo, &mock_email(), short_password).await;
         assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
@@ -963,7 +977,7 @@ mod tests {
             email: "  diego@uniovi.es  ".to_string(),
             password: "Password123".to_string(),
         };
-        let result = register(&repo, payload).await.unwrap();
+        let result = register(&repo, &mock_email(), payload).await.unwrap();
         assert_eq!(result.email, "diego@uniovi.es");
     }
 
