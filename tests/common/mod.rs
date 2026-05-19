@@ -34,6 +34,7 @@ pub async fn setup() -> TestContext {
     }
 }
 
+#[allow(dead_code)]
 pub async fn verify_user(pool: &PgPool, email: &str) {
     sqlx::query!("UPDATE users SET verified = true WHERE email = $1", email)
         .execute(pool)
