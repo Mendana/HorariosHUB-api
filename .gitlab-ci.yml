@@ -80,12 +80,12 @@ docker-push:
   stage: docker
   before_script:
     - until docker info; do echo "Waiting for Docker..."; sleep 2; done
-    - echo "$CI_REGISTRY_PASSWORD" |
-      docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-  script:
     - cat /etc/resolv.conf
     - nslookup horariospceo.ingenieriainformatica.uniovi.es
     - curl -vk https://horariospceo.ingenieriainformatica.uniovi.es:5050/v2/
+    - echo "$CI_REGISTRY_PASSWORD" |
+      docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
     - docker build -f docker/backend.Dockerfile -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:latest
