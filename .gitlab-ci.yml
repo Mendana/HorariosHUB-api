@@ -72,9 +72,6 @@ docker-push:
   stage: docker
   before_script:
     - until docker info; do echo "Waiting for Docker..."; sleep 2; done
-    - cat /etc/resolv.conf
-    - nslookup horariospceo.ingenieriainformatica.uniovi.es
-    - curl -vk https://horariospceo.ingenieriainformatica.uniovi.es:5050/v2/
     - echo "$CI_REGISTRY_PASSWORD" |
       docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
