@@ -61,16 +61,8 @@ test:
   before_script: []
   tags:
     - docker-dind
-  services:
-    - name: docker:28-dind
-      alias: docker
-      command: ["--insecure-registry=horariospceo.ingenieriainformatica.uniovi.es:5050"]
   variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_TLS_VERIFY: 1
-    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
-    FF_NETWORK_PER_BUILD: "false"  # ← desactivado para que DinD alcance el registry
+    DOCKER_HOST: unix:///var/run/docker.sock
 
 # =========================
 # DOCKER PUSH (solo al mergear a main)
