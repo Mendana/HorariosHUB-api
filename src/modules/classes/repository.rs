@@ -68,6 +68,15 @@ pub trait ClassRepository: Send + Sync {
         duration_min: Option<i32>,
         classroom: Option<&str>,
     ) -> Result<Session, AppError>;
+
+    /// Elimina una sesión de clase por su ID.
+    ///
+    /// # Arguments
+    /// * `id` - El ID de la sesión que se desea eliminar.
+    ///
+    /// # Returns
+    /// * `Result<(), AppError>` - Devuelve `Ok(())` si la operación fue exitosa, o un `AppError` si ocurre un error durante la operación.
+    async fn delete_session(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgClassRepository {
@@ -214,5 +223,19 @@ impl ClassRepository for PgClassRepository {
         .ok_or(AppError::NotFound)?;
 
         Ok(session)
+    }
+
+    async fn delete_session(&self, id: Uuid) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            DELETE FROM sessions
+            WHERE id = $1
+            "#,
+            id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }

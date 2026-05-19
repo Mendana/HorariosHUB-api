@@ -80,6 +80,12 @@ pub struct UpdateClassRequest {
 
 pub type UpdateClassResponse = CreateClassResponse;
 
+/// Respuesta de `DELETE /api/classes/{id}`
+#[derive(Debug, Serialize)]
+pub struct DeleteClassResponse {
+    pub message: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Type, Clone, PartialEq)]
 #[sqlx(type_name = "session_source", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
