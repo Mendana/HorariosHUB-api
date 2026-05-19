@@ -28,15 +28,6 @@ pub struct CreateClassRequest {
     pub duration_minutes: i32,
 }
 
-fn validate_multiple_of_30(duration: i32) -> Result<(), validator::ValidationError> {
-    if duration % 30 != 0 {
-        return Err(validator::ValidationError::new(
-            "duration_minutes must be a multiple of 30",
-        ));
-    }
-    Ok(())
-}
-
 #[derive(Debug, sqlx::FromRow)]
 pub struct Session {
     pub id: Uuid,
@@ -63,6 +54,32 @@ pub struct CreateClassResponse {
     pub duration_minutes: i32,
 }
 
+/// Payload del endpoint `PATCH /api/classes/{id}`
+///
+/// Permite actualizar los campos de una clase
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateClassRequest {
+    pub classroom: Option<String>, // Cuidado que una classroom vacía no es lo mismo que una
+    // classroom nula
+    #[validate(length(min = 1, message = "El nombre de la clase no puede estar vacío"))]
+    pub name: Option<String>,
+
+    pub r#type: Option<String>,
+
+    pub date: Option<DateInput>,
+
+    pub start_time: Option<String>,
+
+    #[validate(
+        range(min = 30, message = "La duración mínima de la clase es de 30 minutos"),
+        custom(function = "validate_multiple_of_30")
+    )]
+    pub duration_minutes: Option<i32>,
+}
+
+pub type UpdateClassResponse = CreateClassResponse;
+
 #[derive(Debug, Deserialize, Serialize, Type, Clone, PartialEq)]
 #[sqlx(type_name = "session_source", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
@@ -77,4 +94,13 @@ pub struct DateInput {
     pub year: i32,
     pub month: u32,
     pub day: u32,
+}
+
+fn validate_multiple_of_30(duration: i32) -> Result<(), validator::ValidationError> {
+    if duration % 30 != 0 {
+        return Err(validator::ValidationError::new(
+            "duration_minutes must be a multiple of 30",
+        ));
+    }
+    Ok(())
 }
