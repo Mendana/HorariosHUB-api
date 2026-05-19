@@ -12,7 +12,9 @@ use crate::{
     modules::{
         auth::middleware::ProfessorOrAbove,
         classes::{
-            models::{CreateClassRequest, CreateClassResponse, UpdateClassRequest},
+            models::{
+                CreateClassRequest, CreateClassResponse, DeleteClassResponse, UpdateClassRequest,
+            },
             service,
         },
     },
@@ -47,6 +49,17 @@ pub async fn update_class(
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
     let response = service::update_class(state.class_repo.as_ref(), id, payload).await?;
+
+    Ok(Json(response))
+}
+
+/// DELETE /api/classes/{id}
+pub async fn delete_class(
+    State(state): State<AppState>,
+    ProfessorOrAbove(_): ProfessorOrAbove,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<DeleteClassResponse>> {
+    let response = service::delete_class(state.class_repo.as_ref(), id).await?;
 
     Ok(Json(response))
 }

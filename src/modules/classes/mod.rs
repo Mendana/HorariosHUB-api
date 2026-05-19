@@ -12,5 +12,8 @@ use axum::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/classes", post(handlers::create_class))
-        .route("/classes/{id}", patch(handlers::update_class))
+        .route(
+            "/classes/{id}",
+            patch(handlers::update_class).delete(handlers::delete_class),
+        )
 }

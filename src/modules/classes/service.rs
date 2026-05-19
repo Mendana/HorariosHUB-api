@@ -5,8 +5,8 @@ use crate::{
     errors::AppError,
     modules::classes::{
         models::{
-            CreateClassRequest, CreateClassResponse, Session, UpdateClassRequest,
-            UpdateClassResponse,
+            CreateClassRequest, CreateClassResponse, DeleteClassResponse, Session,
+            UpdateClassRequest, UpdateClassResponse,
         },
         repository::ClassRepository,
     },
@@ -122,6 +122,25 @@ pub async fn update_class(
         .await?;
 
     Ok(build_response(session, end_time))
+}
+
+/// Elimina una sesión existente por su ID
+///
+/// # Errores
+/// - [`AppError::NotFound`] si no se encuentra la sesión a eliminar
+/// - [`AppError::AppError`] si ocurre un error durante la operación de eliminación
+pub async fn delete_class(
+    repo: &dyn ClassRepository,
+    id: Uuid,
+) -> Result<DeleteClassResponse, AppError> {
+    // Verificar que la sesión existe antes de intentar eliminarla
+    repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+
+    repo.delete_session(id).await?;
+
+    Ok(DeleteClassResponse {
+        message: "Clase eliminada".into(),
+    })
 }
 
 fn build_response(session: Session, end_time: NaiveTime) -> CreateClassResponse {
