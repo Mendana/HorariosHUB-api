@@ -6,6 +6,7 @@ pub mod jwt;
 pub mod modules;
 pub mod seed;
 pub mod services;
+pub mod utils;
 
 use axum::Router;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::modules::auth::repository::{PgUserRepository, UserRepository};
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
+use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
 use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
@@ -25,6 +27,7 @@ pub struct AppState {
     pub user_repo: Arc<dyn UserRepository>,
     pub schedule_repo: Arc<dyn ScheduleRepository>,
     pub class_repo: Arc<dyn ClassRepository>,
+    pub proposals_repo: Arc<dyn ProposalRepository>,
     pub email: Arc<dyn EmailService>,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
@@ -79,6 +82,7 @@ pub async fn run() -> anyhow::Result<()> {
     let state = AppState {
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
         class_repo: Arc::new(PgClassRepository::new(pool.clone())),
+        proposals_repo: Arc::new(PgProposalRepository::new(pool.clone())),
         schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
         pool: Arc::new(pool),
         email,
@@ -116,11 +120,13 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
     let pool = Arc::new(pool);
     let user_repo = Arc::new(PgUserRepository::new((*pool).clone()));
     let class_repo = Arc::new(PgClassRepository::new((*pool).clone()));
+    let proposals_repo = Arc::new(PgProposalRepository::new((*pool).clone()));
     let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
         user_repo,
         class_repo,
+        proposals_repo,
         schedule_repo,
         email: Arc::new(MockEmailService),
         cache: Arc::new(cache::MokaCache::new(100, 60)),

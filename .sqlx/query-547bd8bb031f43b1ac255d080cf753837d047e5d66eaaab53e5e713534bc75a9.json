@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO changes (\n                proposed_by,\n                change_type,\n                session_id,\n                subject,\n                grp,\n                new_starts_at,\n                new_duration,\n                new_classroom,\n                prev_starts_at,\n                prev_duration,\n                prev_classroom\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n            RETURNING\n                id,\n                proposed_by,\n                session_id,\n                subject,\n                grp,\n                change_type AS \"change_type: ChangeType\",\n                change_status AS \"change_status: ChangeStatus\",\n                prev_starts_at,\n                prev_duration,\n                prev_classroom,\n                new_starts_at,\n                new_duration,\n                new_classroom,\n                proposed_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "proposed_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "grp",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "change_type: ChangeType",
+        "type_info": {
+          "Custom": {
+            "name": "change_type",
+            "kind": {
+              "Enum": [
+                "create",
+                "modify",
+                "delete"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "change_status: ChangeStatus",
+        "type_info": {
+          "Custom": {
+            "name": "change_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "prev_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "prev_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "prev_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "new_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "new_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "new_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "proposed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "change_type",
+            "kind": {
+              "Enum": [
+                "create",
+                "modify",
+                "delete"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "547bd8bb031f43b1ac255d080cf753837d047e5d66eaaab53e5e713534bc75a9"
+}
