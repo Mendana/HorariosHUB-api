@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            se.id,\n            s.subject,\n            s.grp AS \"group\",\n            se.starts_at,\n            se.duration_min\n        FROM schedule s\n        JOIN sessions se\n        ON se.subject = s.subject\n        AND se.grp = s.grp\n        WHERE s.user_id = $1\n        AND se.starts_at >= $2\n        AND se.starts_at < $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "group",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "duration_min",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6e8097b235eac143757d8e1678323d8e959d96ca3ca544961fd751634c6024da"
+}

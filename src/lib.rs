@@ -15,6 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::modules::auth::repository::{PgUserRepository, UserRepository};
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
+use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
 // Estado compartido que Axum inyecta en cada handler
@@ -22,6 +23,7 @@ use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailS
 pub struct AppState {
     pub pool: Arc<sqlx::PgPool>,
     pub user_repo: Arc<dyn UserRepository>,
+    pub schedule_repo: Arc<dyn ScheduleRepository>,
     pub class_repo: Arc<dyn ClassRepository>,
     pub email: Arc<dyn EmailService>,
     pub cache: Arc<dyn cache::AppCache>,
@@ -77,6 +79,7 @@ pub async fn run() -> anyhow::Result<()> {
     let state = AppState {
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
         class_repo: Arc::new(PgClassRepository::new(pool.clone())),
+        schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
         pool: Arc::new(pool),
         email,
         cache,
@@ -113,11 +116,12 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
     let pool = Arc::new(pool);
     let user_repo = Arc::new(PgUserRepository::new((*pool).clone()));
     let class_repo = Arc::new(PgClassRepository::new((*pool).clone()));
-
+    let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
         user_repo,
         class_repo,
+        schedule_repo,
         email: Arc::new(MockEmailService),
         cache: Arc::new(cache::MokaCache::new(100, 60)),
         config: Arc::new(config::Config {
