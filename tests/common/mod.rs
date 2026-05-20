@@ -42,6 +42,7 @@ pub async fn verify_user(pool: &PgPool, email: &str) {
         .expect("No se pudo verificar el usuario en la DB");
 }
 
+#[allow(dead_code)]
 pub async fn login_user(server: &TestServer, email: &str, password: &str) -> String {
     use serde_json::json;
 
