@@ -1,42 +1,6 @@
-use crate::common::{login_user, setup};
+use crate::common::{create_test_session, login_as, setup};
 use axum::http::StatusCode;
 use serde_json::json;
-
-async fn login_as(ctx: &crate::common::TestContext, email: &str, role: &str) -> String {
-    ctx.server
-        .post("/auth/register")
-        .json(&json!({ "email": email, "password": "Password123" }))
-        .await;
-
-    sqlx::query("UPDATE users SET role = $1::user_role, verified = true WHERE email = $2")
-        .bind(role)
-        .bind(email)
-        .execute(&ctx.pool)
-        .await
-        .unwrap();
-
-    login_user(&ctx.server, email, "Password123").await
-}
-
-async fn create_test_session(pool: &sqlx::PgPool) -> uuid::Uuid {
-    sqlx::query!(
-        "INSERT INTO subject_groups (subject, grp) VALUES ('ALG', 'Teoría') ON CONFLICT DO NOTHING"
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-
-    sqlx::query_scalar!(
-        r#"
-        INSERT INTO sessions (subject, grp, starts_at, duration_min, source, is_overridden)
-        VALUES ('ALG', 'Teoría', '2025-09-15T09:00:00Z', 90, 'scraper', false)
-        RETURNING id
-        "#
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap()
-}
 
 // ── CREATE ────────────────────────────────────────────────────────────────────
 
