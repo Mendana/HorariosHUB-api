@@ -1,4 +1,5 @@
 use axum_test::TestServer;
+use serde_json::json;
 use sqlx::PgPool;
 use testcontainers::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
@@ -68,4 +69,42 @@ pub async fn login_user(server: &TestServer, email: &str, password: &str) -> Str
         .next()
         .expect("No se pudo extraer el token")
         .to_string()
+}
+
+#[allow(dead_code)]
+pub async fn login_as(ctx: &crate::common::TestContext, email: &str, role: &str) -> String {
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": email, "password": "Password123" }))
+        .await;
+
+    sqlx::query("UPDATE users SET role = $1::user_role, verified = true WHERE email = $2")
+        .bind(role)
+        .bind(email)
+        .execute(&ctx.pool)
+        .await
+        .unwrap();
+
+    login_user(&ctx.server, email, "Password123").await
+}
+
+#[allow(dead_code)]
+pub async fn create_test_session(pool: &sqlx::PgPool) -> uuid::Uuid {
+    sqlx::query!(
+        "INSERT INTO subject_groups (subject, grp) VALUES ('ALG', 'Teoría') ON CONFLICT DO NOTHING"
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query_scalar!(
+        r#"
+        INSERT INTO sessions (subject, grp, starts_at, duration_min, source, is_overridden)
+        VALUES ('ALG', 'Teoría', '2025-09-15T09:00:00Z', 90, 'scraper', false)
+        RETURNING id
+        "#
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }

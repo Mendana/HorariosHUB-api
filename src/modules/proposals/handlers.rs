@@ -1,13 +1,18 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     AppState,
     errors::{ApiResult, AppError},
     modules::{
-        auth::middleware::AuthenticatedUser,
+        auth::middleware::{AuthenticatedUser, ProfessorOrAbove},
         proposals::{
-            models::{CreateProposalRequest, CreateProposalResponse},
+            models::{ApproveProposalResponse, CreateProposalRequest, CreateProposalResponse},
             service,
         },
     },
@@ -32,4 +37,21 @@ pub async fn create_proposal(
     .await?;
 
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+pub async fn approve_proposal(
+    State(state): State<AppState>,
+    ProfessorOrAbove(professor): ProfessorOrAbove,
+    Path(id): Path<Uuid>,
+) -> ApiResult<(StatusCode, Json<ApproveProposalResponse>)> {
+    let response = service::approve_proposal(
+        state.proposals_repo.as_ref(),
+        state.class_repo.as_ref(),
+        id,
+        professor.id,
+    )
+    .await?;
+
+    Ok((StatusCode::OK, Json(response)))
 }

@@ -22,6 +22,13 @@ impl From<Change> for CreateProposalResponse {
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApproveProposalResponse {
+    pub id: Uuid,
+    pub status: ChangeStatus,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "changeType", content = "changes")]
 pub enum CreateProposalRequest {
@@ -127,7 +134,7 @@ pub enum ChangeType {
     Delete,
 }
 
-#[derive(Debug, sqlx::Type, Serialize)]
+#[derive(Debug, sqlx::Type, Serialize, PartialEq)]
 #[sqlx(type_name = "change_status", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ChangeStatus {

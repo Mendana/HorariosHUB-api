@@ -7,7 +7,9 @@ use crate::AppState;
 use axum::{Router, routing::post};
 
 pub fn routes() -> Router<AppState> {
-    let routes = Router::new().route("/", post(handlers::create_proposal));
+    let routes = Router::new()
+        .route("/", post(handlers::create_proposal))
+        .route("/{id}/approve", post(handlers::approve_proposal));
 
     Router::new().nest("/proposals", routes)
 }

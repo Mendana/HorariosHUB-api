@@ -6,7 +6,8 @@ use crate::{
         classes::repository::ClassRepository,
         proposals::{
             models::{
-                ChangeType, CreateChangeInput, CreateProposalRequest, CreateProposalResponse,
+                ApproveProposalResponse, Change, ChangeStatus, ChangeType, CreateChangeInput,
+                CreateProposalRequest, CreateProposalResponse,
             },
             repository::ProposalRepository,
         },
@@ -83,4 +84,94 @@ pub async fn create_proposal(
     };
 
     Ok(CreateProposalResponse::from(change))
+}
+
+pub async fn approve_proposal(
+    proposal_repo: &dyn ProposalRepository,
+    class_repo: &dyn ClassRepository,
+    change_id: Uuid,
+    approved_by: Uuid,
+) -> Result<ApproveProposalResponse, AppError> {
+    let change = proposal_repo.find_by_id(change_id).await?;
+    if change.change_status != ChangeStatus::Pending {
+        return Err(AppError::Conflict("Change is not pending".into()));
+    }
+    match change.change_type {
+        ChangeType::Create => approve_create(class_repo, change, approved_by).await?,
+        ChangeType::Delete => approve_delete(class_repo, change).await?,
+        ChangeType::Modify => approve_modify(class_repo, change).await?,
+    }
+
+    proposal_repo.approve(change_id).await?;
+
+    Ok(ApproveProposalResponse {
+        id: (change_id),
+        status: (super::models::ChangeStatus::Approved),
+    })
+}
+
+async fn approve_create(
+    class_repo: &dyn ClassRepository,
+    change: Change,
+    approved_by: Uuid,
+) -> Result<(), AppError> {
+    let subject = change
+        .subject
+        .as_deref()
+        .ok_or(AppError::BadRequest("Missing subject".into()))?;
+
+    let grp = change
+        .grp
+        .as_deref()
+        .ok_or(AppError::BadRequest("Missing grp".into()))?;
+
+    let starts_at = change
+        .new_starts_at
+        .ok_or(AppError::BadRequest("Missing starts_at".into()))?;
+
+    let duration = change
+        .new_duration
+        .ok_or(AppError::BadRequest("Missing duration".into()))?;
+
+    let classroom = change.new_classroom.as_deref();
+
+    class_repo
+        .create_session(subject, grp, starts_at, duration, classroom, approved_by)
+        .await?;
+
+    Ok(())
+}
+
+async fn approve_delete(class_repo: &dyn ClassRepository, change: Change) -> Result<(), AppError> {
+    let session_id = change
+        .session_id
+        .ok_or(AppError::BadRequest("Missing session_id".into()))?;
+
+    class_repo.delete_session(session_id).await?;
+
+    Ok(())
+}
+
+async fn approve_modify(class_repo: &dyn ClassRepository, change: Change) -> Result<(), AppError> {
+    let session_id = change
+        .session_id
+        .ok_or(AppError::BadRequest("Missing session_id".into()))?;
+
+    let subject = change.subject.as_deref();
+
+    let grp = change.grp.as_deref();
+
+    let starts_at = change.new_starts_at.or(change.prev_starts_at);
+
+    let duration_min = change.new_duration.or(change.prev_duration);
+
+    let classroom_owned = change.new_classroom.or(change.prev_classroom);
+
+    let classroom = classroom_owned.as_deref();
+
+    class_repo
+        .update_session(session_id, subject, grp, starts_at, duration_min, classroom)
+        .await?;
+
+    Ok(())
 }

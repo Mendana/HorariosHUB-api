@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::{
     errors::AppError,
@@ -21,6 +22,10 @@ pub trait ProposalRepository: Send + Sync {
     /// # Returns
     /// * `Result<Change, AppError>` - Devuelve el cambio creado o un `AppError`.
     async fn create_change(&self, input: CreateChangeInput) -> Result<Change, AppError>;
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Change, AppError>;
+
+    async fn approve(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgProposalRepository {
@@ -85,5 +90,52 @@ impl ProposalRepository for PgProposalRepository {
         .await?;
 
         Ok(change)
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Change, AppError> {
+        let change = sqlx::query_as!(
+            Change,
+            r#"
+            SELECT
+                id,
+                proposed_by,
+                session_id,
+                subject,
+                grp,
+                change_type AS "change_type: ChangeType",
+                change_status AS "change_status: ChangeStatus",
+                prev_starts_at,
+                prev_duration,
+                prev_classroom,
+                new_starts_at,
+                new_duration,
+                new_classroom,
+                proposed_at
+            FROM changes
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+        Ok(change)
+    }
+
+    async fn approve(&self, id: Uuid) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE changes
+            SET change_status = $1
+            WHERE id = $2
+            "#,
+            ChangeStatus::Approved as ChangeStatus,
+            id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
