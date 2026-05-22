@@ -7,7 +7,7 @@ use crate::{
         proposals::{
             models::{
                 ApproveProposalResponse, Change, ChangeStatus, ChangeType, CreateChangeInput,
-                CreateProposalRequest, CreateProposalResponse,
+                CreateProposalRequest, CreateProposalResponse, RejectProposalResponse,
             },
             repository::ProposalRepository,
         },
@@ -174,4 +174,21 @@ async fn approve_modify(class_repo: &dyn ClassRepository, change: Change) -> Res
         .await?;
 
     Ok(())
+}
+
+pub async fn reject_proposal(
+    proposal_repo: &dyn ProposalRepository,
+    change_id: Uuid,
+) -> Result<RejectProposalResponse, AppError> {
+    let change = proposal_repo.find_by_id(change_id).await?;
+    if change.change_status != ChangeStatus::Pending {
+        return Err(AppError::Conflict("Change is not pending".into()));
+    }
+
+    proposal_repo.reject(change_id).await?;
+
+    Ok(RejectProposalResponse {
+        id: (change_id),
+        status: (super::models::ChangeStatus::Rejected),
+    })
 }

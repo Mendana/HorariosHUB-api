@@ -1,13 +1,13 @@
-// ── APPROVE PROPOSAL ──────────────────────────────────────────────────────────
+// ── REJECT PROPOSAL ───────────────────────────────────────────────────────────
 use crate::common::{create_test_session, login_as, setup};
 use axum::http::StatusCode;
 use serde_json::json;
 
 #[tokio::test]
-async fn approve_proposal_create_devuelve_200_y_aprueba() {
+async fn reject_proposal_create_devuelve_200_y_rechaza() {
     let ctx = setup().await;
 
-    let professor_token = login_as(&ctx, "prof_approve@uniovi.es", "professor").await;
+    let professor_token = login_as(&ctx, "prof_reject@uniovi.es", "professor").await;
 
     let response = ctx
         .server
@@ -30,18 +30,18 @@ async fn approve_proposal_create_devuelve_200_y_aprueba() {
     let body: serde_json::Value = response.json();
     let proposal_id = body["id"].as_str().unwrap();
 
-    let approve_response = ctx
+    let reject_response = ctx
         .server
-        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .patch(&format!("/proposals/{proposal_id}/reject"))
         .add_header("Authorization", format!("Bearer {professor_token}"))
         .await;
 
-    approve_response.assert_status(StatusCode::OK);
+    reject_response.assert_status(StatusCode::OK);
 
-    let approve_body: serde_json::Value = approve_response.json();
+    let reject_body: serde_json::Value = reject_response.json();
 
-    assert_eq!(approve_body["id"], proposal_id);
-    assert_eq!(approve_body["status"], "approved");
+    assert_eq!(reject_body["id"], proposal_id);
+    assert_eq!(reject_body["status"], "rejected");
 
     let row = sqlx::query!(
         "SELECT change_status::text FROM changes WHERE id = $1::uuid",
@@ -51,33 +51,25 @@ async fn approve_proposal_create_devuelve_200_y_aprueba() {
     .await
     .unwrap();
 
-    assert_eq!(row.change_status, Some("approved".to_string()));
+    assert_eq!(row.change_status, Some("rejected".to_string()));
+}
 
-    let session = sqlx::query!(
-        r#"
-        SELECT subject, grp, classroom, duration_min
-        FROM sessions
-        WHERE subject = 'ALG'
-        LIMIT 1
-        "#
+#[tokio::test]
+async fn reject_proposal_modify_no_modifica_sesion() {
+    let ctx = setup().await;
+
+    let professor_token = login_as(&ctx, "prof_reject_modify@uniovi.es", "professor").await;
+
+    let session_id = create_test_session(&ctx.pool).await;
+
+    // Guardamos los valores originales antes de proponer el cambio
+    let original = sqlx::query!(
+        "SELECT duration_min, classroom FROM sessions WHERE id = $1",
+        session_id
     )
     .fetch_one(&ctx.pool)
     .await
     .unwrap();
-
-    assert_eq!(session.subject, "ALG");
-    assert_eq!(session.grp, "Teoría");
-    assert_eq!(session.classroom, Some("Aula 101".to_string()));
-    assert_eq!(session.duration_min, 90);
-}
-
-#[tokio::test]
-async fn approve_proposal_modify_actualiza_sesion() {
-    let ctx = setup().await;
-
-    let professor_token = login_as(&ctx, "prof_modify@uniovi.es", "professor").await;
-
-    let session_id = create_test_session(&ctx.pool).await;
 
     let response = ctx
         .server
@@ -98,35 +90,32 @@ async fn approve_proposal_modify_actualiza_sesion() {
     let body: serde_json::Value = response.json();
     let proposal_id = body["id"].as_str().unwrap();
 
-    let approve_response = ctx
+    let reject_response = ctx
         .server
-        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .patch(&format!("/proposals/{proposal_id}/reject"))
         .add_header("Authorization", format!("Bearer {professor_token}"))
         .await;
 
-    approve_response.assert_status(StatusCode::OK);
+    reject_response.assert_status(StatusCode::OK);
 
+    // La sesión no debe haber cambiado
     let session = sqlx::query!(
-        r#"
-        SELECT duration_min, classroom
-        FROM sessions
-        WHERE id = $1
-        "#,
+        "SELECT duration_min, classroom FROM sessions WHERE id = $1",
         session_id
     )
     .fetch_one(&ctx.pool)
     .await
     .unwrap();
 
-    assert_eq!(session.duration_min, 60);
-    assert_eq!(session.classroom, Some("Aula 202".to_string()));
+    assert_eq!(session.duration_min, original.duration_min);
+    assert_eq!(session.classroom, original.classroom);
 }
 
 #[tokio::test]
-async fn approve_proposal_delete_elimina_sesion() {
+async fn reject_proposal_delete_no_elimina_sesion() {
     let ctx = setup().await;
 
-    let professor_token = login_as(&ctx, "prof_delete@uniovi.es", "professor").await;
+    let professor_token = login_as(&ctx, "prof_reject_delete@uniovi.es", "professor").await;
 
     let session_id = create_test_session(&ctx.pool).await;
 
@@ -147,27 +136,28 @@ async fn approve_proposal_delete_elimina_sesion() {
     let body: serde_json::Value = response.json();
     let proposal_id = body["id"].as_str().unwrap();
 
-    let approve_response = ctx
+    let reject_response = ctx
         .server
-        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .patch(&format!("/proposals/{proposal_id}/reject"))
         .add_header("Authorization", format!("Bearer {professor_token}"))
         .await;
 
-    approve_response.assert_status(StatusCode::OK);
+    reject_response.assert_status(StatusCode::OK);
 
-    let deleted = sqlx::query!("SELECT id FROM sessions WHERE id = $1", session_id)
+    // La sesión debe seguir existiendo
+    let still_exists = sqlx::query!("SELECT id FROM sessions WHERE id = $1", session_id)
         .fetch_optional(&ctx.pool)
         .await
         .unwrap();
 
-    assert!(deleted.is_none());
+    assert!(still_exists.is_some());
 }
 
 #[tokio::test]
-async fn approve_proposal_devuelve_409_si_ya_esta_aprobada() {
+async fn reject_proposal_devuelve_409_si_ya_esta_rechazada() {
     let ctx = setup().await;
 
-    let professor_token = login_as(&ctx, "prof_conflict@uniovi.es", "professor").await;
+    let professor_token = login_as(&ctx, "prof_reject_conflict@uniovi.es", "professor").await;
 
     let response = ctx
         .server
@@ -180,7 +170,49 @@ async fn approve_proposal_devuelve_409_si_ya_esta_aprobada() {
                 "grp": "Teoría",
                 "newStartsAt": "2025-09-15T09:00:00Z",
                 "newDuration": 90,
-                "newClassroom": "Aula 101"  // añadido: era el campo que faltaba
+                "newClassroom": "Aula 101"
+            }
+        }))
+        .await;
+
+    response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    let proposal_id = body["id"].as_str().unwrap();
+
+    ctx.server
+        .patch(&format!("/proposals/{proposal_id}/reject"))
+        .add_header("Authorization", format!("Bearer {professor_token}"))
+        .await
+        .assert_status(StatusCode::OK);
+
+    let second_response = ctx
+        .server
+        .patch(&format!("/proposals/{proposal_id}/reject"))
+        .add_header("Authorization", format!("Bearer {professor_token}"))
+        .await;
+
+    second_response.assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn reject_proposal_devuelve_409_si_ya_esta_aprobada() {
+    let ctx = setup().await;
+
+    let professor_token =
+        login_as(&ctx, "prof_reject_already_approved@uniovi.es", "professor").await;
+
+    let response = ctx
+        .server
+        .post("/proposals")
+        .add_header("Authorization", format!("Bearer {professor_token}"))
+        .json(&json!({
+            "changeType": "create",
+            "changes": {
+                "subject": "ALG",
+                "grp": "Teoría",
+                "newStartsAt": "2025-09-15T09:00:00Z",
+                "newDuration": 90,
+                "newClassroom": "Aula 101"
             }
         }))
         .await;
@@ -195,24 +227,24 @@ async fn approve_proposal_devuelve_409_si_ya_esta_aprobada() {
         .await
         .assert_status(StatusCode::OK);
 
-    let second_response = ctx
+    let reject_response = ctx
         .server
-        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .patch(&format!("/proposals/{proposal_id}/reject"))
         .add_header("Authorization", format!("Bearer {professor_token}"))
         .await;
 
-    second_response.assert_status(StatusCode::CONFLICT);
+    reject_response.assert_status(StatusCode::CONFLICT);
 }
 
 #[tokio::test]
-async fn approve_proposal_devuelve_404_si_no_existe() {
+async fn reject_proposal_devuelve_404_si_no_existe() {
     let ctx = setup().await;
 
-    let professor_token = login_as(&ctx, "prof404@uniovi.es", "professor").await;
+    let professor_token = login_as(&ctx, "prof_reject_404@uniovi.es", "professor").await;
 
     let response = ctx
         .server
-        .patch("/proposals/00000000-0000-0000-0000-000000000000/approve")
+        .patch("/proposals/00000000-0000-0000-0000-000000000000/reject")
         .add_header("Authorization", format!("Bearer {professor_token}"))
         .await;
 
@@ -220,13 +252,10 @@ async fn approve_proposal_devuelve_404_si_no_existe() {
 }
 
 #[tokio::test]
-async fn approve_proposal_devuelve_401_sin_autenticacion() {
+async fn reject_proposal_devuelve_401_sin_autenticacion() {
     let ctx = setup().await;
 
-    // Necesitamos una proposal real: con UUID inexistente el router devuelve 404
-    // antes de que el middleware de auth pueda rechazar con 401.
-    // Creamos una proposal y usamos su ID para que la ruta sea válida.
-    let professor_token = login_as(&ctx, "prof_auth_check@uniovi.es", "professor").await;
+    let professor_token = login_as(&ctx, "prof_reject_auth_check@uniovi.es", "professor").await;
 
     let create_response = ctx
         .server
@@ -250,7 +279,7 @@ async fn approve_proposal_devuelve_401_sin_autenticacion() {
 
     let response = ctx
         .server
-        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .patch(&format!("/proposals/{proposal_id}/reject"))
         // Sin Authorization header
         .await;
 
@@ -258,13 +287,11 @@ async fn approve_proposal_devuelve_401_sin_autenticacion() {
 }
 
 #[tokio::test]
-async fn approve_proposal_devuelve_403_si_no_es_professor_or_above() {
+async fn reject_proposal_devuelve_403_si_no_es_professor_or_above() {
     let ctx = setup().await;
 
-    // Igual que el 401: necesitamos una proposal real para que el middleware
-    // de autorización se ejecute y pueda devolver 403.
-    let professor_token = login_as(&ctx, "prof_for_forbidden@uniovi.es", "professor").await;
-    let student_token = login_as(&ctx, "student_approve@uniovi.es", "student").await;
+    let professor_token = login_as(&ctx, "prof_for_reject_forbidden@uniovi.es", "professor").await;
+    let student_token = login_as(&ctx, "student_reject@uniovi.es", "student").await;
 
     let create_response = ctx
         .server
@@ -288,7 +315,7 @@ async fn approve_proposal_devuelve_403_si_no_es_professor_or_above() {
 
     let response = ctx
         .server
-        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .patch(&format!("/proposals/{proposal_id}/reject"))
         .add_header("Authorization", format!("Bearer {student_token}"))
         .await;
 

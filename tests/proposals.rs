@@ -4,3 +4,5 @@ mod common;
 mod approve;
 #[path = "proposals/create.rs"]
 mod create;
+#[path = "proposals/reject.rs"]
+mod reject;

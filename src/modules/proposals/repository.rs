@@ -26,6 +26,8 @@ pub trait ProposalRepository: Send + Sync {
     async fn find_by_id(&self, id: Uuid) -> Result<Change, AppError>;
 
     async fn approve(&self, id: Uuid) -> Result<(), AppError>;
+
+    async fn reject(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgProposalRepository {
@@ -131,6 +133,22 @@ impl ProposalRepository for PgProposalRepository {
             WHERE id = $2
             "#,
             ChangeStatus::Approved as ChangeStatus,
+            id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn reject(&self, id: Uuid) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE changes
+            SET change_status = $1
+            WHERE id = $2
+            "#,
+            ChangeStatus::Rejected as ChangeStatus,
             id
         )
         .execute(&self.pool)

@@ -29,6 +29,13 @@ pub struct ApproveProposalResponse {
     pub status: ChangeStatus,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RejectProposalResponse {
+    pub id: Uuid,
+    pub status: ChangeStatus,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "changeType", content = "changes")]
 pub enum CreateProposalRequest {
