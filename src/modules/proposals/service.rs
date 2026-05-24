@@ -224,6 +224,28 @@ pub async fn list_proposals(
     })
 }
 
+pub async fn list_my_proposals(
+    proposal_repo: &dyn ProposalRepository,
+    user_id: Uuid,
+    page: u32,
+    limit: u32,
+) -> Result<ListProposalsResponse, AppError> {
+    let offset = (page - 1) * limit;
+
+    let (changes, total) = proposal_repo
+        .list_by_proposer(user_id, offset, limit)
+        .await?;
+
+    let data = changes.into_iter().map(change_to_resumed).collect();
+
+    Ok(ListProposalsResponse {
+        data,
+        total,
+        page,
+        limit,
+    })
+}
+
 /// Convierte un `ChangeWithAuthor` a un `ResumedChange`, que es la forma en la que se devuelve en la lista de propuestas.
 fn change_to_resumed(c: ChangeWithAuthor) -> ResumedChange {
     ResumedChange {

@@ -14,7 +14,8 @@ use crate::{
         proposals::{
             models::{
                 ApproveProposalResponse, CreateProposalRequest, CreateProposalResponse,
-                ListProposalsQuery, ListProposalsResponse, RejectProposalResponse,
+                ListMineProposalsQuery, ListProposalsQuery, ListProposalsResponse,
+                RejectProposalResponse,
             },
             service,
         },
@@ -83,6 +84,28 @@ pub async fn list_proposals(
     let response = service::list_proposals(
         state.proposals_repo.as_ref(),
         params.status,
+        params.page.unwrap_or(1),
+        params.limit.unwrap_or(10),
+    )
+    .await?;
+
+    Ok((StatusCode::OK, Json(response)))
+}
+
+/// GET /proposals/mine?page=1&limit=10
+///
+/// Devuelve una lista paginada de propuestas creadas por el usuario autenticado.
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id))]
+pub async fn list_my_proposals(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(params): Query<ListMineProposalsQuery>,
+) -> ApiResult<(StatusCode, Json<ListProposalsResponse>)> {
+    let user_id = auth.user.id;
+
+    let response = service::list_my_proposals(
+        state.proposals_repo.as_ref(),
+        user_id,
         params.page.unwrap_or(1),
         params.limit.unwrap_or(10),
     )

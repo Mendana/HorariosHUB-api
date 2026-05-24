@@ -182,6 +182,12 @@ pub struct ListOfModifications {
     pub classroom: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListMineProposalsQuery {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
 #[derive(Debug, sqlx::Type, Deserialize, Serialize)]
 #[sqlx(type_name = "change_type", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
