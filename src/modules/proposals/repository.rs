@@ -31,11 +31,16 @@ pub trait ProposalRepository: Send + Sync {
 
     async fn reject(&self, id: Uuid) -> Result<(), AppError>;
 
-    /// Lista propuestas con el email del autor resuelto via JOIN.
-    /// Si `status` es `None`, devuelve propuestas de cualquier estado.
     async fn list_by_status(
         &self,
         status: Option<ChangeStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<ChangeWithAuthor>, u32), AppError>;
+
+    async fn list_by_proposer(
+        &self,
+        proposer_id: Uuid,
         offset: u32,
         limit: u32,
     ) -> Result<(Vec<ChangeWithAuthor>, u32), AppError>;
@@ -260,5 +265,55 @@ impl ProposalRepository for PgProposalRepository {
                 Ok((changes, total))
             }
         }
+    }
+
+    async fn list_by_proposer(
+        &self,
+        proposer_id: Uuid,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<ChangeWithAuthor>, u32), AppError> {
+        let changes = sqlx::query_as!(
+            ChangeWithAuthor,
+            r#"
+            SELECT
+                c.id,
+                c.proposed_by,
+                c.session_id,
+                c.subject,
+                c.grp,
+                c.change_type AS "change_type: ChangeType",
+                c.change_status AS "change_status: ChangeStatus",
+                c.prev_starts_at,
+                c.prev_duration,
+                c.prev_classroom,
+                c.new_starts_at,
+                c.new_duration,
+                c.new_classroom,
+                c.proposed_at,
+                u.email AS author_email
+            FROM changes c
+            JOIN users u ON u.id = c.proposed_by
+            WHERE c.proposed_by = $1
+            ORDER BY c.proposed_at DESC
+            OFFSET $2
+            LIMIT $3
+            "#,
+            proposer_id,
+            offset as i64,
+            limit as i64
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM changes WHERE proposed_by = $1"#,
+            proposer_id
+        )
+        .fetch_one(&self.pool)
+        .await?
+        .unwrap_or(0) as u32;
+
+        Ok((changes, total))
     }
 }
