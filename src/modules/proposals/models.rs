@@ -133,15 +133,65 @@ pub struct DeleteChanges {
     pub session_id: Uuid,
 }
 
-#[derive(Debug, sqlx::Type, Deserialize)]
+/// A diferencia de `ChangeStatus`, incluye la variante `All` para no filtrar.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProposalStatusFilter {
+    Pending,
+    Approved,
+    Rejected,
+    All,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListProposalsQuery {
+    pub status: Option<ProposalStatusFilter>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListProposalsResponse {
+    pub data: Vec<ResumedChange>,
+    pub total: u32,
+    pub page: u32,
+    pub limit: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumedChange {
+    pub id: Uuid,
+    pub action: ChangeType,
+    pub class_id: Option<Uuid>,
+    pub old: ListOfModifications,
+    pub new: ListOfModifications,
+    pub status: ChangeStatus,
+    pub author: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListOfModifications {
+    pub subject: Option<String>,
+    pub grp: Option<String>,
+    pub starts_at: Option<DateTime<Utc>>,
+    pub duration: Option<i32>,
+    pub classroom: Option<String>,
+}
+
+#[derive(Debug, sqlx::Type, Deserialize, Serialize)]
 #[sqlx(type_name = "change_type", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ChangeType {
     Create,
     Modify,
     Delete,
 }
 
-#[derive(Debug, sqlx::Type, Serialize, PartialEq)]
+#[derive(Debug, Clone, sqlx::Type, Serialize, PartialEq, Deserialize)]
 #[sqlx(type_name = "change_status", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ChangeStatus {
@@ -165,6 +215,25 @@ pub struct Change {
     pub proposed_at: DateTime<Utc>,
     pub prev_classroom: Option<String>,
     pub new_classroom: Option<String>,
+}
+
+/// Igual que `Change` pero con el email del autor ya resuelto (resultado de JOIN con users).
+pub struct ChangeWithAuthor {
+    pub id: Uuid,
+    pub proposed_by: Uuid,
+    pub session_id: Option<Uuid>,
+    pub subject: Option<String>,
+    pub grp: Option<String>,
+    pub change_type: ChangeType,
+    pub change_status: ChangeStatus,
+    pub prev_starts_at: Option<DateTime<Utc>>,
+    pub prev_duration: Option<i32>,
+    pub new_starts_at: Option<DateTime<Utc>>,
+    pub new_duration: Option<i32>,
+    pub proposed_at: DateTime<Utc>,
+    pub prev_classroom: Option<String>,
+    pub new_classroom: Option<String>,
+    pub author_email: String,
 }
 
 pub struct CreateChangeInput {

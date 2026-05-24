@@ -3,7 +3,9 @@ use uuid::Uuid;
 
 use crate::{
     errors::AppError,
-    modules::proposals::models::{Change, ChangeStatus, ChangeType, CreateChangeInput},
+    modules::proposals::models::{
+        Change, ChangeStatus, ChangeType, ChangeWithAuthor, CreateChangeInput,
+    },
 };
 
 #[async_trait::async_trait]
@@ -28,6 +30,15 @@ pub trait ProposalRepository: Send + Sync {
     async fn approve(&self, id: Uuid) -> Result<(), AppError>;
 
     async fn reject(&self, id: Uuid) -> Result<(), AppError>;
+
+    /// Lista propuestas con el email del autor resuelto via JOIN.
+    /// Si `status` es `None`, devuelve propuestas de cualquier estado.
+    async fn list_by_status(
+        &self,
+        status: Option<ChangeStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<ChangeWithAuthor>, u32), AppError>;
 }
 
 pub struct PgProposalRepository {
@@ -155,5 +166,99 @@ impl ProposalRepository for PgProposalRepository {
         .await?;
 
         Ok(())
+    }
+
+    async fn list_by_status(
+        &self,
+        status: Option<ChangeStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<ChangeWithAuthor>, u32), AppError> {
+        match status {
+            Some(s) => {
+                let changes = sqlx::query_as!(
+                    ChangeWithAuthor,
+                    r#"
+                    SELECT
+                        c.id,
+                        c.proposed_by,
+                        c.session_id,
+                        c.subject,
+                        c.grp,
+                        c.change_type AS "change_type: ChangeType",
+                        c.change_status AS "change_status: ChangeStatus",
+                        c.prev_starts_at,
+                        c.prev_duration,
+                        c.prev_classroom,
+                        c.new_starts_at,
+                        c.new_duration,
+                        c.new_classroom,
+                        c.proposed_at,
+                        u.email AS author_email
+                    FROM changes c
+                    JOIN users u ON u.id = c.proposed_by
+                    WHERE c.change_status = $1
+                    ORDER BY c.proposed_at DESC
+                    OFFSET $2
+                    LIMIT $3
+                    "#,
+                    s.clone() as ChangeStatus,
+                    offset as i64,
+                    limit as i64
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                let total = sqlx::query_scalar!(
+                    r#"SELECT COUNT(*) FROM changes WHERE change_status = $1"#,
+                    s as ChangeStatus
+                )
+                .fetch_one(&self.pool)
+                .await?
+                .unwrap_or(0) as u32;
+
+                Ok((changes, total))
+            }
+
+            None => {
+                let changes = sqlx::query_as!(
+                    ChangeWithAuthor,
+                    r#"
+                    SELECT
+                        c.id,
+                        c.proposed_by,
+                        c.session_id,
+                        c.subject,
+                        c.grp,
+                        c.change_type    AS "change_type: ChangeType",
+                        c.change_status  AS "change_status: ChangeStatus",
+                        c.prev_starts_at,
+                        c.prev_duration,
+                        c.prev_classroom,
+                        c.new_starts_at,
+                        c.new_duration,
+                        c.new_classroom,
+                        c.proposed_at,
+                        u.email          AS author_email
+                    FROM changes c
+                    JOIN users u ON u.id = c.proposed_by
+                    ORDER BY c.proposed_at DESC
+                    OFFSET $1
+                    LIMIT $2
+                    "#,
+                    offset as i64,
+                    limit as i64
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                let total = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM changes"#)
+                    .fetch_one(&self.pool)
+                    .await?
+                    .unwrap_or(0) as u32;
+
+                Ok((changes, total))
+            }
+        }
     }
 }
