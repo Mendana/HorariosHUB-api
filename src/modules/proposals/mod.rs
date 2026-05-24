@@ -11,7 +11,10 @@ use axum::{
 
 pub fn routes() -> Router<AppState> {
     let routes = Router::new()
-        .route("/", post(handlers::create_proposal))
+        .route(
+            "/",
+            post(handlers::create_proposal).get(handlers::list_proposals),
+        )
         .route("/{id}/approve", patch(handlers::approve_proposal))
         .route("/{id}/reject", patch(handlers::reject_proposal));
 

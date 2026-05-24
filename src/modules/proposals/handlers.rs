@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use uuid::Uuid;
@@ -14,7 +14,7 @@ use crate::{
         proposals::{
             models::{
                 ApproveProposalResponse, CreateProposalRequest, CreateProposalResponse,
-                RejectProposalResponse,
+                ListProposalsQuery, ListProposalsResponse, RejectProposalResponse,
             },
             service,
         },
@@ -66,6 +66,27 @@ pub async fn reject_proposal(
     Path(id): Path<Uuid>,
 ) -> ApiResult<(StatusCode, Json<RejectProposalResponse>)> {
     let response = service::reject_proposal(state.proposals_repo.as_ref(), id).await?;
+
+    Ok((StatusCode::OK, Json(response)))
+}
+
+/// GET /proposals?status=pending&page=1&limit=10
+///
+/// Devulve una lista paginada de propuestas,
+/// filtradas por estado (pending, approved, rejected).
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+pub async fn list_proposals(
+    State(state): State<AppState>,
+    ProfessorOrAbove(professor): ProfessorOrAbove,
+    Query(params): Query<ListProposalsQuery>,
+) -> ApiResult<(StatusCode, Json<ListProposalsResponse>)> {
+    let response = service::list_proposals(
+        state.proposals_repo.as_ref(),
+        params.status,
+        params.page.unwrap_or(1),
+        params.limit.unwrap_or(10),
+    )
+    .await?;
 
     Ok((StatusCode::OK, Json(response)))
 }

@@ -6,8 +6,10 @@ use crate::{
         classes::repository::ClassRepository,
         proposals::{
             models::{
-                ApproveProposalResponse, Change, ChangeStatus, ChangeType, CreateChangeInput,
-                CreateProposalRequest, CreateProposalResponse, RejectProposalResponse,
+                ApproveProposalResponse, Change, ChangeStatus, ChangeType, ChangeWithAuthor,
+                CreateChangeInput, CreateProposalRequest, CreateProposalResponse,
+                ListOfModifications, ListProposalsResponse, ProposalStatusFilter,
+                RejectProposalResponse, ResumedChange,
             },
             repository::ProposalRepository,
         },
@@ -191,4 +193,59 @@ pub async fn reject_proposal(
         id: (change_id),
         status: (super::models::ChangeStatus::Rejected),
     })
+}
+
+pub async fn list_proposals(
+    proposal_repo: &dyn ProposalRepository,
+    status: Option<ProposalStatusFilter>,
+    page: u32,
+    limit: u32,
+) -> Result<ListProposalsResponse, AppError> {
+    let offset = (page - 1) * limit;
+
+    let status_filter = match status {
+        None | Some(ProposalStatusFilter::All) => None,
+        Some(ProposalStatusFilter::Pending) => Some(ChangeStatus::Pending),
+        Some(ProposalStatusFilter::Approved) => Some(ChangeStatus::Approved),
+        Some(ProposalStatusFilter::Rejected) => Some(ChangeStatus::Rejected),
+    };
+
+    let (changes, total) = proposal_repo
+        .list_by_status(status_filter, offset, limit)
+        .await?;
+
+    let data = changes.into_iter().map(change_to_resumed).collect();
+
+    Ok(ListProposalsResponse {
+        data,
+        total,
+        page,
+        limit,
+    })
+}
+
+/// Convierte un `ChangeWithAuthor` a un `ResumedChange`, que es la forma en la que se devuelve en la lista de propuestas.
+fn change_to_resumed(c: ChangeWithAuthor) -> ResumedChange {
+    ResumedChange {
+        id: c.id,
+        action: c.change_type,
+        class_id: c.session_id,
+        old: ListOfModifications {
+            subject: None,
+            grp: None,
+            starts_at: c.prev_starts_at,
+            duration: c.prev_duration,
+            classroom: c.prev_classroom,
+        },
+        new: ListOfModifications {
+            subject: c.subject,
+            grp: c.grp,
+            starts_at: c.new_starts_at,
+            duration: c.new_duration,
+            classroom: c.new_classroom,
+        },
+        status: c.change_status,
+        author: c.author_email,
+        created_at: c.proposed_at,
+    }
 }

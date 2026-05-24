@@ -1,0 +1,141 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        c.id,\n                        c.proposed_by,\n                        c.session_id,\n                        c.subject,\n                        c.grp,\n                        c.change_type AS \"change_type: ChangeType\",\n                        c.change_status AS \"change_status: ChangeStatus\",\n                        c.prev_starts_at,\n                        c.prev_duration,\n                        c.prev_classroom,\n                        c.new_starts_at,\n                        c.new_duration,\n                        c.new_classroom,\n                        c.proposed_at,\n                        u.email AS author_email\n                    FROM changes c\n                    JOIN users u ON u.id = c.proposed_by\n                    WHERE c.change_status = $1\n                    ORDER BY c.proposed_at DESC\n                    OFFSET $2\n                    LIMIT $3\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "proposed_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "grp",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "change_type: ChangeType",
+        "type_info": {
+          "Custom": {
+            "name": "change_type",
+            "kind": {
+              "Enum": [
+                "create",
+                "modify",
+                "delete"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "change_status: ChangeStatus",
+        "type_info": {
+          "Custom": {
+            "name": "change_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "prev_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "prev_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "prev_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "new_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "new_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "new_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "proposed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "author_email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "change_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c5b3d974c4fc74e424d49e5084fc2721d7b208e5d8582ef516864641c6868b47"
+}
