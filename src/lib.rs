@@ -18,6 +18,7 @@ use crate::modules::auth::repository::{PgUserRepository, UserRepository};
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
 use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
 use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
+use crate::modules::subjects::repository::{PgSubjectRepository, SubjectRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
 // Estado compartido que Axum inyecta en cada handler
@@ -28,6 +29,7 @@ pub struct AppState {
     pub schedule_repo: Arc<dyn ScheduleRepository>,
     pub class_repo: Arc<dyn ClassRepository>,
     pub proposals_repo: Arc<dyn ProposalRepository>,
+    pub subjects_repo: Arc<dyn SubjectRepository>,
     pub email: Arc<dyn EmailService>,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
@@ -84,6 +86,7 @@ pub async fn run() -> anyhow::Result<()> {
         class_repo: Arc::new(PgClassRepository::new(pool.clone())),
         proposals_repo: Arc::new(PgProposalRepository::new(pool.clone())),
         schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
+        subjects_repo: Arc::new(PgSubjectRepository::new(pool.clone())),
         pool: Arc::new(pool),
         email,
         cache,
@@ -122,12 +125,14 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
     let class_repo = Arc::new(PgClassRepository::new((*pool).clone()));
     let proposals_repo = Arc::new(PgProposalRepository::new((*pool).clone()));
     let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
+    let subject_repo = Arc::new(PgSubjectRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
         user_repo,
         class_repo,
         proposals_repo,
         schedule_repo,
+        subjects_repo: subject_repo,
         email: Arc::new(MockEmailService),
         cache: Arc::new(cache::MokaCache::new(100, 60)),
         config: Arc::new(config::Config {
