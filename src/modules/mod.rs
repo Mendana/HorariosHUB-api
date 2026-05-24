@@ -2,6 +2,7 @@ pub mod auth;
 pub mod classes;
 pub mod proposals;
 pub mod schedule;
+pub mod subjects;
 
 use crate::AppState;
 use axum::Router;
@@ -12,4 +13,5 @@ pub fn routes() -> Router<AppState> {
         .merge(schedule::routes())
         .merge(classes::routes())
         .merge(proposals::routes())
+        .merge(subjects::routes())
 }
