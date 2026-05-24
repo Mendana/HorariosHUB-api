@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -25,4 +25,15 @@ pub struct SubjectGroupRow {
     pub subject: String,
     pub grp: String,
     pub selected: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserSelectionRequest {
+    pub groups: Vec<Uuid>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserSelectionResponse {
+    pub message: String,
+    pub count: usize,
 }
