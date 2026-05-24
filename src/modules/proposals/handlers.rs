@@ -12,7 +12,10 @@ use crate::{
     modules::{
         auth::middleware::{AuthenticatedUser, ProfessorOrAbove},
         proposals::{
-            models::{ApproveProposalResponse, CreateProposalRequest, CreateProposalResponse},
+            models::{
+                ApproveProposalResponse, CreateProposalRequest, CreateProposalResponse,
+                RejectProposalResponse,
+            },
             service,
         },
     },
@@ -52,6 +55,17 @@ pub async fn approve_proposal(
         professor.id,
     )
     .await?;
+
+    Ok((StatusCode::OK, Json(response)))
+}
+
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+pub async fn reject_proposal(
+    State(state): State<AppState>,
+    ProfessorOrAbove(professor): ProfessorOrAbove,
+    Path(id): Path<Uuid>,
+) -> ApiResult<(StatusCode, Json<RejectProposalResponse>)> {
+    let response = service::reject_proposal(state.proposals_repo.as_ref(), id).await?;
 
     Ok((StatusCode::OK, Json(response)))
 }
