@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO sessions (\n                subject, grp, starts_at, duration_min,\n                classroom, source, created_by\n            )\n            VALUES ($1, $2, $3, $4, $5, 'manual', $6)\n            ON CONFLICT (subject, grp, starts_at) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2a571f32e48c4dd57dc32f849dc0f94386e1c026e0f8c972f50e5367eb60f8e"
+}

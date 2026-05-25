@@ -554,6 +554,8 @@ mod tests {
             smtp_password: "test".to_string(),
             smtp_from: "no-reply@horarioshub.com".to_string(),
             base_url: "http://localhost:3000".to_string(),
+            scraper_url: "http://localhost:3000/scraper".to_string(),
+            scraper_min_sessions: 100,
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -592,6 +594,8 @@ mod tests {
             smtp_password: "test".to_string(),
             smtp_from: "no-reply@horarioshub.com".to_string(),
             base_url: "http://localhost:3000".to_string(),
+            scraper_url: "http://localhost:3000/scraper".to_string(),
+            scraper_min_sessions: 100,
         };
         let payload = LoginRequest {
             email: "otro@uniovi.es".to_string(),
@@ -627,6 +631,8 @@ mod tests {
             smtp_password: "test".to_string(),
             smtp_from: "no-reply@horarioshub.com".to_string(),
             base_url: "http://localhost:3000".to_string(),
+            scraper_url: "http://localhost:3000/scraper".to_string(),
+            scraper_min_sessions: 100,
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -1005,6 +1011,8 @@ mod tests {
             smtp_password: "test".to_string(),
             smtp_from: "no-reply@horarioshub.com".to_string(),
             base_url: "http://localhost:3000".to_string(),
+            scraper_url: "http://localhost:3000/scraper".to_string(),
+            scraper_min_sessions: 100,
         };
         let payload = LoginRequest {
             email: "DIEGO@UNIOVI.ES".to_string(),

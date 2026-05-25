@@ -14,6 +14,8 @@ pub struct Config {
     pub smtp_password: String,
     pub smtp_from: String,
     pub base_url: String,
+    pub scraper_url: String,
+    pub scraper_min_sessions: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,6 +52,10 @@ impl Config {
             smtp_password: required("SMTP_PASSWORD")?,
             smtp_from: required("SMTP_FROM")?,
             base_url: required("BASE_URL")?,
+            scraper_url: required("SCRAPER_URL")?,
+            scraper_min_sessions: env::var("SCRAPER_MIN_SESSIONS")
+                .unwrap_or_else(|_| "1000".into())
+                .parse()?,
         })
     }
 

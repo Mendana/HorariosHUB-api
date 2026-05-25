@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH orphans AS (\n                DELETE FROM changes\n                WHERE change_status = 'approved'\n                AND change_type IN ('modify', 'delete')\n                AND subject IS NOT NULL\n                AND grp IS NOT NULL\n                AND prev_starts_at IS NOT NULL\n                AND NOT EXISTS (\n                    SELECT 1 FROM sessions s\n                    WHERE s.subject   = changes.subject\n                    AND   s.grp       = changes.grp\n                    AND   s.starts_at = changes.prev_starts_at\n                )\n                RETURNING\n                    id, proposed_by, session_id, subject, grp,\n                    change_type, change_status, prev_starts_at,\n                    prev_duration, new_starts_at, new_duration,\n                    proposed_at, prev_classroom, new_classroom\n            )\n            INSERT INTO changes_history (\n                id, proposed_by, session_id, subject, grp,\n                change_type, change_status, prev_starts_at,\n                prev_duration, new_starts_at, new_duration,\n                proposed_at, prev_classroom, new_classroom,\n                archived_at\n            )\n            SELECT\n                id, proposed_by, session_id, subject, grp,\n                change_type, change_status,  -- se conserva 'approved' para trazabilidad\n                prev_starts_at, prev_duration, new_starts_at, new_duration,\n                proposed_at, prev_classroom, new_classroom,\n                NOW()\n            FROM orphans\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "35b30d42a6191b97c81b1c5b8c1129498ee48684e2c25a012a874a411496765c"
+}

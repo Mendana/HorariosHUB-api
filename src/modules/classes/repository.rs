@@ -77,6 +77,21 @@ pub trait ClassRepository: Send + Sync {
     /// # Returns
     /// * `Result<(), AppError>` - Devuelve `Ok(())` si la operación fue exitosa, o un `AppError` si ocurre un error durante la operación.
     async fn delete_session(&self, id: Uuid) -> Result<(), AppError>;
+
+    /// Busca el ID de una sesión por su clave natural (subject, grp, starts_at).
+    ///
+    /// Útil cuando `session_id` ha quedado NULL por el ciclo borrar+reinsertar
+    /// del scraper (ON DELETE SET NULL) y hay que relocalizar la sesión.
+    ///
+    /// # Returns
+    /// * `Ok(Some(id))` si existe una sesión con esa clave natural.
+    /// * `Ok(None)` si no existe.
+    async fn find_by_natural_key(
+        &self,
+        subject: &str,
+        grp: &str,
+        starts_at: DateTime<Utc>,
+    ) -> Result<Option<Uuid>, AppError>;
 }
 
 pub struct PgClassRepository {
@@ -237,5 +252,26 @@ impl ClassRepository for PgClassRepository {
         .await?;
 
         Ok(())
+    }
+
+    async fn find_by_natural_key(
+        &self,
+        subject: &str,
+        grp: &str,
+        starts_at: DateTime<Utc>,
+    ) -> Result<Option<Uuid>, AppError> {
+        let id = sqlx::query_scalar!(
+            r#"
+            SELECT id FROM sessions
+            WHERE subject = $1 AND grp = $2 AND starts_at = $3
+            "#,
+            subject,
+            grp,
+            starts_at,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(id)
     }
 }

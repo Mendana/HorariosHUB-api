@@ -1,0 +1,97 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                change_type AS \"change_type: crate::modules::proposals::models::ChangeType\",\n                subject,\n                grp,\n                prev_starts_at,\n                prev_duration,\n                prev_classroom,\n                new_starts_at,\n                new_duration,\n                new_classroom,\n                proposed_by,\n                proposed_at\n            FROM changes\n            WHERE change_status = 'approved'\n            ORDER BY proposed_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "change_type: crate::modules::proposals::models::ChangeType",
+        "type_info": {
+          "Custom": {
+            "name": "change_type",
+            "kind": {
+              "Enum": [
+                "create",
+                "modify",
+                "delete"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "grp",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "prev_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "prev_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "prev_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "new_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "new_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "new_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "proposed_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "proposed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f3e0fe89104cad2dbb326bcc14c0fdc530e9b580fe8c4e7046822e8c57eff18f"
+}
