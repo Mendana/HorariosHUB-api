@@ -167,3 +167,39 @@ async fn patch_classes_devuelve_422_si_duracion_no_multiplo_30() {
 
     response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn patch_classes_registra_change_aprobado() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof8@uniovi.es", "professor").await;
+    let id = create_session(&ctx, &token).await;
+    let session_uuid = uuid::Uuid::parse_str(&id).unwrap();
+
+    ctx.server
+        .patch(&format!("/classes/{id}"))
+        .add_header("Authorization", format!("Bearer {token}"))
+        .json(&json!({ "durationMinutes": 60, "classroom": "Aula 9" }))
+        .await;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT change_type::text AS change_type, change_status::text AS change_status,
+               session_id, prev_duration, prev_classroom, new_duration, new_classroom
+        FROM changes
+        WHERE change_type = 'modify' AND change_status = 'approved'
+          AND session_id = $1
+        "#,
+        session_uuid
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir un change de tipo modify aprobado");
+
+    assert_eq!(row.change_type.as_deref(), Some("modify"));
+    assert_eq!(row.change_status.as_deref(), Some("approved"));
+    assert_eq!(row.session_id, Some(session_uuid));
+    assert_eq!(row.prev_duration, Some(90)); // duración original de create_session
+    assert_eq!(row.prev_classroom.as_deref(), Some("Aula 1")); // classroom original
+    assert_eq!(row.new_duration, Some(60)); // solo cambia si difiere del prev
+    assert_eq!(row.new_classroom.as_deref(), Some("Aula 9"));
+}

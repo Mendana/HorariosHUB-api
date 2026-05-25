@@ -39,6 +39,7 @@ pub async fn create_proposal(
                 prev_starts_at: None,
                 prev_duration: None,
                 prev_classroom: None,
+                status: ChangeStatus::Pending,
             })
             .await?
         }
@@ -60,6 +61,7 @@ pub async fn create_proposal(
                 prev_starts_at: Some(session.starts_at),
                 prev_duration: Some(session.duration_min),
                 prev_classroom: session.classroom,
+                status: ChangeStatus::Pending,
             })
             .await?
         }
@@ -81,6 +83,7 @@ pub async fn create_proposal(
                 new_starts_at: None,
                 new_duration: None,
                 new_classroom: None,
+                status: ChangeStatus::Pending,
             })
             .await?
         }

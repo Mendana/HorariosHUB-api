@@ -31,7 +31,13 @@ pub async fn create_class(
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
-    let response = service::create_class(state.class_repo.as_ref(), payload, professor.id).await?;
+    let response = service::create_class(
+        state.class_repo.as_ref(),
+        state.proposals_repo.as_ref(),
+        payload,
+        professor.id,
+    )
+    .await?;
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -48,7 +54,14 @@ pub async fn update_class(
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
-    let response = service::update_class(state.class_repo.as_ref(), id, payload).await?;
+    let response = service::update_class(
+        state.class_repo.as_ref(),
+        state.proposals_repo.as_ref(),
+        id,
+        professor.id,
+        payload,
+    )
+    .await?;
 
     Ok(Json(response))
 }
@@ -56,10 +69,16 @@ pub async fn update_class(
 /// DELETE /api/classes/{id}
 pub async fn delete_class(
     State(state): State<AppState>,
-    ProfessorOrAbove(_): ProfessorOrAbove,
+    ProfessorOrAbove(professor): ProfessorOrAbove,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<DeleteClassResponse>> {
-    let response = service::delete_class(state.class_repo.as_ref(), id).await?;
+    let response = service::delete_class(
+        state.class_repo.as_ref(),
+        state.proposals_repo.as_ref(),
+        id,
+        professor.id,
+    )
+    .await?;
 
     Ok(Json(response))
 }

@@ -73,9 +73,10 @@ impl ProposalRepository for PgProposalRepository {
                 new_classroom,
                 prev_starts_at,
                 prev_duration,
-                prev_classroom
+                prev_classroom,
+                change_status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING
                 id,
                 proposed_by,
@@ -103,6 +104,7 @@ impl ProposalRepository for PgProposalRepository {
             input.prev_starts_at,
             input.prev_duration,
             input.prev_classroom,
+            input.status as _,
         )
         .fetch_one(&self.pool)
         .await?;
