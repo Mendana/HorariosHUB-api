@@ -2,7 +2,10 @@ use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{errors::AppError, modules::schedule::models::ScheduleSubjectRow};
+use crate::{
+    errors::AppError,
+    modules::schedule::models::{CopiedRows, CopyScheduleUsers, ScheduleSubjectRow},
+};
 
 #[async_trait::async_trait]
 pub trait ScheduleRepository: Send + Sync {
@@ -17,6 +20,15 @@ pub trait ScheduleRepository: Send + Sync {
         user_id: &Uuid,
         start_time: DateTime<Utc>,
     ) -> Result<Vec<ScheduleSubjectRow>, AppError>;
+
+    /// Copiar horario de otro usuario al propio
+    ///
+    /// Devuelve el número de filas copiadas
+    ///
+    /// # Errores
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos (e.g. conexión)
+    async fn copy_schedule_rows(&self, request: &CopyScheduleUsers)
+    -> Result<CopiedRows, AppError>;
 }
 
 pub struct PgScheduleRepository {
@@ -63,5 +75,23 @@ impl ScheduleRepository for PgScheduleRepository {
         .await?;
 
         Ok(rows)
+    }
+
+    async fn copy_schedule_rows(&self, users: &CopyScheduleUsers) -> Result<CopiedRows, AppError> {
+        let count = sqlx::query!(
+            r#"
+        INSERT INTO schedule (user_id, subject, grp)
+        SELECT $1, subject, grp
+        FROM schedule
+        WHERE user_id = $2
+        "#,
+            users.to_user,
+            users.from_user
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+
+        Ok(CopiedRows { count })
     }
 }

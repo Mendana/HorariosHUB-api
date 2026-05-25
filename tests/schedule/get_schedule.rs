@@ -6,17 +6,15 @@ use serde_json::json;
 use crate::common::{setup, verify_user};
 
 #[tokio::test]
-async fn get_schedule_devuelve_200_con_array_vacio_si_identificador_no_existe() {
+async fn get_schedule_devuelve_404_si_identificador_no_existe() {
     let ctx = setup().await;
 
     let response = ctx
         .server
-        .get("/api/schedule/noexiste?start=2026-05-19T00:00:00Z")
+        .get("/schedule/noexiste?start=2026-05-19T00:00:00Z")
         .await;
 
-    response.assert_status_ok();
-    let body: serde_json::Value = response.json();
-    assert!(body["sessions"].as_array().unwrap().is_empty());
+    response.assert_status_not_found();
 }
 
 #[tokio::test]
@@ -26,7 +24,7 @@ async fn get_schedule_devuelve_400_si_identificador_no_valido() {
     // Too short identifier! (< 6 characters)
     let response = ctx
         .server
-        .get("/api/schedule/short?start=2026-05-19T00:00:00Z")
+        .get("/schedule/short?start=2026-05-19T00:00:00Z")
         .await;
 
     response.assert_status_bad_request();
@@ -46,7 +44,7 @@ async fn get_schedule_devuelve_200_con_array_vacio_si_identificador_correcto_per
 
     let response = ctx
         .server
-        .get("/api/schedule/usuario?start=2026-05-19T00:00:00Z")
+        .get("/schedule/usuario@uniovi.es?start=2026-05-19T00:00:00Z")
         .await;
 
     response.assert_status_ok();
@@ -110,7 +108,7 @@ async fn get_schedule_devuelve_200_con_array_con_datos_si_todo_bien() {
 
     let response = ctx
         .server
-        .get(&format!("/api/schedule/{email}?start=2026-05-19T00:00:00Z"))
+        .get(&format!("/schedule/{email}?start=2026-05-19T00:00:00Z"))
         .await;
 
     response.assert_status_ok();
