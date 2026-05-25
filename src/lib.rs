@@ -95,7 +95,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // 7. Router
     let app = Router::new()
-        .merge(modules::routes())
+        .merge(modules::routes(true))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
@@ -150,7 +150,7 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
         }),
     };
 
-    let app = modules::routes().with_state(state);
+    let app = modules::routes(false).with_state(state);
     let pool_for_tests = (*pool).clone();
     (app, pool_for_tests)
 }
