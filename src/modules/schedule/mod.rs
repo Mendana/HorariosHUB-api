@@ -7,6 +7,10 @@ use crate::AppState;
 use axum::{Router, routing::get};
 
 pub fn routes() -> Router<AppState> {
-    let api_routes = Router::new().route("/schedule/{identifier}", get(handlers::get_schedule));
-    Router::new().nest("/api", api_routes)
+    Router::new()
+        .route("/schedule/{identifier}", get(handlers::get_schedule))
+        .route(
+            "/schedule/copy",
+            axum::routing::post(handlers::copy_schedule),
+        )
 }

@@ -21,11 +21,30 @@ pub struct ScheduleSubjectRow {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct ScheduleResponse {
+pub struct GetScheduleResponse {
     pub sessions: Vec<ScheduleSubject>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ScheduleQuery {
+pub struct GetScheduleQuery {
     pub start: DateTime<Utc>,
+}
+#[derive(Debug, Deserialize)]
+pub struct CopyScheduleQuery {
+    pub user: String,
+}
+
+pub struct CopyScheduleUsers {
+    pub from_user: Uuid,
+    pub to_user: Uuid,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct CopyScheduleResponse {
+    pub message: String,
+    pub copied_count: Option<u64>,
+}
+
+pub struct CopiedRows {
+    pub count: u64,
 }
