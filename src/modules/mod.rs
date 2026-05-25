@@ -7,9 +7,9 @@ pub mod subjects;
 use crate::AppState;
 use axum::Router;
 
-pub fn routes() -> Router<AppState> {
+pub fn routes(with_rate_limit: bool) -> Router<AppState> {
     Router::new()
-        .merge(auth::routes())
+        .merge(auth::routes(with_rate_limit))
         .merge(schedule::routes())
         .merge(classes::routes())
         .merge(proposals::routes())

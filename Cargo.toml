@@ -44,6 +44,8 @@ serde_json = "1"
 # -- Secutiry
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 bcrypt = "0.19"
+tower_governor = "0.8"
+governor = "0.10"
 
 # -- Utils
 uuid = { version = "1", features = ["v4", "serde"] }
