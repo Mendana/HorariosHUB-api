@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT change_type::text AS change_type, change_status::text AS change_status,\n               session_id, prev_duration, prev_classroom\n        FROM changes\n        WHERE change_type = 'delete' AND change_status = 'approved'\n          AND prev_duration = 90\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "change_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "change_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "prev_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "prev_classroom",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a5ec1b79d2d87a2380a7373c1ac3288b59867a2e71ca772ba5bed557fba59a1d"
+}

@@ -154,3 +154,39 @@ async fn delete_classes_devuelve_404_en_segundo_borrado() {
 
     response.assert_status(StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn delete_classes_registra_change_aprobado() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof7@uniovi.es", "professor").await;
+    let id = create_session(&ctx, &token).await;
+
+    ctx.server
+        .delete(&format!("/classes/{id}"))
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    // Tras borrar la sesión, ON DELETE SET NULL pone session_id a NULL en el change.
+    // Verificamos que el registro existe con los prev_* correctos.
+    let row = sqlx::query!(
+        r#"
+        SELECT change_type::text AS change_type, change_status::text AS change_status,
+               session_id, prev_duration, prev_classroom
+        FROM changes
+        WHERE change_type = 'delete' AND change_status = 'approved'
+          AND prev_duration = 90
+        "#
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir un change de tipo delete aprobado");
+
+    assert_eq!(row.change_type.as_deref(), Some("delete"));
+    assert_eq!(row.change_status.as_deref(), Some("approved"));
+    assert!(
+        row.session_id.is_none(),
+        "ON DELETE SET NULL debe haber puesto session_id a NULL"
+    );
+    assert_eq!(row.prev_duration, Some(90));
+    assert_eq!(row.prev_classroom.as_deref(), Some("Aula 1"));
+}

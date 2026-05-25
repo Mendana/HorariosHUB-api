@@ -3,12 +3,18 @@ use uuid::Uuid;
 
 use crate::{
     errors::AppError,
-    modules::classes::{
-        models::{
-            CreateClassRequest, CreateClassResponse, DeleteClassResponse, Session,
-            UpdateClassRequest, UpdateClassResponse,
+    modules::{
+        classes::{
+            models::{
+                CreateClassRequest, CreateClassResponse, DeleteClassResponse, Session,
+                UpdateClassRequest, UpdateClassResponse,
+            },
+            repository::ClassRepository,
         },
-        repository::ClassRepository,
+        proposals::{
+            models::{ChangeStatus, ChangeType, CreateChangeInput},
+            repository::ProposalRepository,
+        },
     },
 };
 
@@ -23,7 +29,8 @@ use crate::{
 /// # Errores
 /// - [`AppError::BadRequest`] si la fecha o el formato de hora son inválidos
 pub async fn create_class(
-    repo: &dyn ClassRepository,
+    class_repo: &dyn ClassRepository,
+    proposals_repo: &dyn ProposalRepository,
     payload: CreateClassRequest,
     created_by: Uuid,
 ) -> Result<CreateClassResponse, AppError> {
@@ -38,10 +45,11 @@ pub async fn create_class(
 
     let starts_at = Utc.from_utc_datetime(&NaiveDateTime::new(date, start_time));
 
-    repo.upsert_subject_group(&payload.name, &payload.r#type)
+    class_repo
+        .upsert_subject_group(&payload.name, &payload.r#type)
         .await?;
 
-    let session = repo
+    let session = class_repo
         .create_session(
             &payload.name,
             &payload.r#type,
@@ -50,6 +58,23 @@ pub async fn create_class(
             payload.classroom.as_deref(),
             created_by,
         )
+        .await?;
+
+    proposals_repo
+        .create_change(CreateChangeInput {
+            proposed_by: created_by,
+            change_type: ChangeType::Create,
+            session_id: None,
+            subject: Some(session.subject.clone()),
+            grp: Some(session.grp.clone()),
+            new_starts_at: Some(session.starts_at),
+            new_duration: Some(session.duration_min),
+            new_classroom: session.classroom.clone(),
+            prev_starts_at: None,
+            prev_duration: None,
+            prev_classroom: None,
+            status: ChangeStatus::Approved,
+        })
         .await?;
 
     Ok(build_response(session, end_time))
@@ -64,11 +89,13 @@ pub async fn create_class(
 /// - [`AppError::BadRequest`] si la fecha o el formato de hora son inválidos
 /// - [`AppError::NotFound`] si no se encuentra la sesión a modificar
 pub async fn update_class(
-    repo: &dyn ClassRepository,
+    class_repo: &dyn ClassRepository,
+    proposals_repo: &dyn ProposalRepository,
     id: Uuid,
+    professor_id: Uuid,
     payload: UpdateClassRequest,
 ) -> Result<UpdateClassResponse, AppError> {
-    let existing = repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+    let existing = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
 
     // Parsear fecha (si viene)
     let new_date = payload
@@ -110,7 +137,7 @@ pub async fn update_class(
     // Calcular end_time a partir de effective_start y effective_duration
     let end_time = effective_start.time() + Duration::minutes(effective_duration as i64);
 
-    let session = repo
+    let session = class_repo
         .update_session(
             id,
             payload.name.as_deref(),
@@ -119,6 +146,29 @@ pub async fn update_class(
             payload.duration_minutes,
             payload.classroom.as_deref(),
         )
+        .await?;
+
+    proposals_repo
+        .create_change(CreateChangeInput {
+            proposed_by: professor_id,
+            change_type: ChangeType::Modify,
+            session_id: Some(session.id),
+            subject: None,
+            grp: None,
+            new_starts_at: session
+                .starts_at
+                .ne(&existing.starts_at)
+                .then_some(session.starts_at),
+            new_duration: session
+                .duration_min
+                .ne(&existing.duration_min)
+                .then_some(session.duration_min),
+            new_classroom: session.classroom.clone(),
+            prev_starts_at: Some(existing.starts_at),
+            prev_duration: Some(existing.duration_min),
+            prev_classroom: existing.classroom.clone(),
+            status: ChangeStatus::Approved,
+        })
         .await?;
 
     Ok(build_response(session, end_time))
@@ -130,13 +180,32 @@ pub async fn update_class(
 /// - [`AppError::NotFound`] si no se encuentra la sesión a eliminar
 /// - [`AppError::AppError`] si ocurre un error durante la operación de eliminación
 pub async fn delete_class(
-    repo: &dyn ClassRepository,
+    class_repo: &dyn ClassRepository,
+    proposals_repo: &dyn ProposalRepository,
     id: Uuid,
+    professor_id: Uuid,
 ) -> Result<DeleteClassResponse, AppError> {
     // Verificar que la sesión existe antes de intentar eliminarla
-    repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+    let session = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
 
-    repo.delete_session(id).await?;
+    proposals_repo
+        .create_change(CreateChangeInput {
+            proposed_by: professor_id,
+            change_type: ChangeType::Delete,
+            session_id: Some(id),
+            subject: None,
+            grp: None,
+            new_starts_at: None,
+            new_duration: None,
+            new_classroom: None,
+            prev_starts_at: Some(session.starts_at),
+            prev_duration: Some(session.duration_min),
+            prev_classroom: session.classroom.clone(),
+            status: ChangeStatus::Approved,
+        })
+        .await?;
+
+    class_repo.delete_session(id).await?;
 
     Ok(DeleteClassResponse {
         message: "Clase eliminada".into(),

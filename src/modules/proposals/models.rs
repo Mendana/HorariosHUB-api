@@ -254,4 +254,5 @@ pub struct CreateChangeInput {
     pub prev_starts_at: Option<DateTime<Utc>>,
     pub prev_duration: Option<i32>,
     pub prev_classroom: Option<String>,
+    pub status: ChangeStatus,
 }

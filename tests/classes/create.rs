@@ -291,3 +291,46 @@ async fn post_classes_sesion_tiene_source_manual() {
     assert!(session.scraped_at.is_none());
     assert!(session.created_by.is_some());
 }
+
+#[tokio::test]
+async fn post_classes_registra_change_aprobado() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof9@uniovi.es", "professor").await;
+
+    ctx.server
+        .post("/classes")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .json(&json!({
+            "name": "ALG",
+            "type": "Teoría",
+            "classroom": "Aula 1",
+            "date": { "year": 2025, "month": 9, "day": 15 },
+            "startTime": "09:00",
+            "durationMinutes": 90
+        }))
+        .await;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT change_type::text AS change_type, change_status::text AS change_status,
+               session_id, subject, grp, new_duration, new_classroom
+        FROM changes
+        WHERE change_type = 'create' AND change_status = 'approved'
+          AND subject = 'ALG' AND grp = 'Teoría'
+        "#
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir un change de tipo create aprobado");
+
+    assert_eq!(row.change_type.as_deref(), Some("create"));
+    assert_eq!(row.change_status.as_deref(), Some("approved"));
+    assert!(
+        row.session_id.is_none(),
+        "chk_create exige session_id IS NULL"
+    );
+    assert_eq!(row.subject.as_deref(), Some("ALG"));
+    assert_eq!(row.grp.as_deref(), Some("Teoría"));
+    assert_eq!(row.new_duration, Some(90));
+    assert_eq!(row.new_classroom.as_deref(), Some("Aula 1"));
+}
