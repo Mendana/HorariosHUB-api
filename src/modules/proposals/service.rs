@@ -52,8 +52,8 @@ pub async fn create_proposal(
                 proposed_by,
                 change_type: ChangeType::Modify,
                 session_id: Some(changes.session_id),
-                subject: None,
-                grp: None,
+                subject: Some(session.subject.clone()),
+                grp: Some(session.grp.clone()),
                 new_starts_at: changes.new_starts_at,
                 new_duration: changes.new_duration,
                 new_classroom: changes.new_classroom,
@@ -64,22 +64,23 @@ pub async fn create_proposal(
             .await?
         }
         CreateProposalRequest::Delete(changes) => {
-            class_repo
+            let session = class_repo
                 .find_by_id(changes.session_id)
                 .await?
                 .ok_or(AppError::NotFound)?;
+
             repo.create_change(CreateChangeInput {
                 proposed_by,
                 change_type: ChangeType::Delete,
                 session_id: Some(changes.session_id),
-                subject: None,
-                grp: None,
+                subject: Some(session.subject.clone()),
+                grp: Some(session.grp.clone()),
+                prev_starts_at: Some(session.starts_at),
+                prev_duration: Some(session.duration_min),
+                prev_classroom: session.classroom,
                 new_starts_at: None,
                 new_duration: None,
-                prev_starts_at: None,
-                prev_duration: None,
                 new_classroom: None,
-                prev_classroom: None,
             })
             .await?
         }
@@ -144,35 +145,58 @@ async fn approve_create(
     Ok(())
 }
 
+/// Resuelve el UUID de la sesión a partir de un change.
+///
+/// Intenta primero usar `session_id` directamente. Si está a NULL (el scraper
+/// corrió entre la propuesta y la aprobación y lo puso a NULL vía ON DELETE SET NULL),
+/// cae a buscar la sesión por clave natural (subject, grp, prev_starts_at).
+async fn resolve_session_id(
+    class_repo: &dyn ClassRepository,
+    change: &Change,
+) -> Result<Uuid, AppError> {
+    if let Some(id) = change.session_id {
+        return Ok(id);
+    }
+
+    let subject = change.subject.as_deref().ok_or_else(|| {
+        AppError::BadRequest(
+            "No se puede resolver la sesión: session_id es NULL y no hay clave natural".into(),
+        )
+    })?;
+    let grp = change.grp.as_deref().ok_or_else(|| {
+        AppError::BadRequest(
+            "No se puede resolver la sesión: session_id es NULL y no hay clave natural".into(),
+        )
+    })?;
+    let prev_starts_at = change.prev_starts_at.ok_or_else(|| {
+        AppError::BadRequest(
+            "No se puede resolver la sesión: session_id es NULL y no hay clave natural".into(),
+        )
+    })?;
+
+    class_repo
+        .find_by_natural_key(subject, grp, prev_starts_at)
+        .await?
+        .ok_or(AppError::NotFound)
+}
+
 async fn approve_delete(class_repo: &dyn ClassRepository, change: Change) -> Result<(), AppError> {
-    let session_id = change
-        .session_id
-        .ok_or(AppError::BadRequest("Missing session_id".into()))?;
-
+    let session_id = resolve_session_id(class_repo, &change).await?;
     class_repo.delete_session(session_id).await?;
-
     Ok(())
 }
 
 async fn approve_modify(class_repo: &dyn ClassRepository, change: Change) -> Result<(), AppError> {
-    let session_id = change
-        .session_id
-        .ok_or(AppError::BadRequest("Missing session_id".into()))?;
+    let session_id = resolve_session_id(class_repo, &change).await?;
 
-    let subject = change.subject.as_deref();
-
-    let grp = change.grp.as_deref();
-
-    let starts_at = change.new_starts_at.or(change.prev_starts_at);
-
-    let duration_min = change.new_duration.or(change.prev_duration);
-
-    let classroom_owned = change.new_classroom.or(change.prev_classroom);
-
-    let classroom = classroom_owned.as_deref();
+    // subject y grp no se modifican en un modify (son la clave de identidad de la sesión,
+    // no campos que el change quiera cambiar)
+    let starts_at = change.new_starts_at;
+    let duration_min = change.new_duration;
+    let classroom = change.new_classroom.as_deref();
 
     class_repo
-        .update_session(session_id, subject, grp, starts_at, duration_min, classroom)
+        .update_session(session_id, None, None, starts_at, duration_min, classroom)
         .await?;
 
     Ok(())

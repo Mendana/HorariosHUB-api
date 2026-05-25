@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM scraper_locks WHERE id = 'scraper_run'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a1830e256d9a895c2322b7a9cd8ad39c848a6c9265dcc4aaa55cacb06c78bc9b"
+}

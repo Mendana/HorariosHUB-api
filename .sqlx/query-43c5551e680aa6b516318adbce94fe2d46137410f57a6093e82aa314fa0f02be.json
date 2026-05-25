@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH orphans AS (\n                DELETE FROM changes\n                WHERE change_status = 'pending'\n                AND change_type IN ('modify', 'delete')\n                AND NOT EXISTS (\n                    SELECT 1 FROM sessions s\n                    WHERE s.subject = changes.subject\n                    AND   s.grp     = changes.grp\n                    AND   s.starts_at = changes.prev_starts_at\n                )\n                RETURNING\n                    id, proposed_by, session_id, subject, grp,\n                    change_type, change_status, prev_starts_at,\n                    prev_duration, new_starts_at, new_duration,\n                    proposed_at, prev_classroom, new_classroom\n            )\n            INSERT INTO changes_history (\n                id, proposed_by, session_id, subject, grp,\n                change_type, change_status, prev_starts_at,\n                prev_duration, new_starts_at, new_duration,\n                proposed_at, prev_classroom, new_classroom,\n                archived_at\n            )\n            SELECT\n                id, proposed_by, session_id, subject, grp,\n                change_type, 'rejected',     -- se archivan como rejected\n                prev_starts_at, prev_duration, new_starts_at, new_duration,\n                proposed_at, prev_classroom, new_classroom,\n                NOW()\n            FROM orphans\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "43c5551e680aa6b516318adbce94fe2d46137410f57a6093e82aa314fa0f02be"
+}

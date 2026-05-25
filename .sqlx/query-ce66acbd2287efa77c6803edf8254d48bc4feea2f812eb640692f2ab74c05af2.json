@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH moved AS (\n                DELETE FROM changes\n                WHERE change_status = 'rejected'\n                RETURNING\n                    id, proposed_by, session_id, subject, grp,\n                    change_type, change_status, prev_starts_at,\n                    prev_duration, new_starts_at, new_duration,\n                    proposed_at, prev_classroom, new_classroom\n            )\n            INSERT INTO changes_history (\n                id, proposed_by, session_id, subject, grp,\n                change_type, change_status, prev_starts_at,\n                prev_duration, new_starts_at, new_duration,\n                proposed_at, prev_classroom, new_classroom,\n                archived_at\n            )\n            SELECT\n                id, proposed_by, session_id, subject, grp,\n                change_type, change_status, prev_starts_at,\n                prev_duration, new_starts_at, new_duration,\n                proposed_at, prev_classroom, new_classroom,\n                NOW()\n            FROM moved\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ce66acbd2287efa77c6803edf8254d48bc4feea2f812eb640692f2ab74c05af2"
+}

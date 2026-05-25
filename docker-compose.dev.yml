@@ -14,6 +14,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
+
+  scraper:
+    image: horariospceo.ingenieriainformatica.uniovi.es:5050/horarioshub/docker-images/scraper:latest
+    ports:
+      - "3003:3003"
+    networks:
+      - internal
 
   backend:
     build:
@@ -30,6 +39,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      scraper:
+        condition: service_started
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
 
 volumes:
   postgres_dev_data:

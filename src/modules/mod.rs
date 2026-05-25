@@ -2,6 +2,7 @@ pub mod auth;
 pub mod classes;
 pub mod proposals;
 pub mod schedule;
+pub mod scraper;
 pub mod subjects;
 
 use crate::AppState;
@@ -14,4 +15,5 @@ pub fn routes(with_rate_limit: bool) -> Router<AppState> {
         .merge(classes::routes())
         .merge(proposals::routes())
         .merge(subjects::routes())
+        .merge(scraper::routes())
 }
