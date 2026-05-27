@@ -26,6 +26,9 @@ pub enum AppError {
     #[error("Validación fallida: {0}")]
     Validation(String),
 
+    #[error("Demasiadas solicitudes")]
+    TooManyRequests,
+
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 
@@ -42,6 +45,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             AppError::Validation(_) => (StatusCode::UNPROCESSABLE_ENTITY, "validation_error"),
+            AppError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
             AppError::Database(e) => {
                 tracing::error!("DB error: {:?}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "database_error")

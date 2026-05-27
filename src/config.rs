@@ -16,6 +16,7 @@ pub struct Config {
     pub base_url: String,
     pub scraper_url: String,
     pub scraper_min_sessions: usize,
+    pub auto_select_max_concurrent: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +56,9 @@ impl Config {
             scraper_url: required("SCRAPER_URL")?,
             scraper_min_sessions: env::var("SCRAPER_MIN_SESSIONS")
                 .unwrap_or_else(|_| "1000".into())
+                .parse()?,
+            auto_select_max_concurrent: env::var("AUTO_SELECT_MAX_CONCURRENT")
+                .unwrap_or_else(|_| "5".into())
                 .parse()?,
         })
     }

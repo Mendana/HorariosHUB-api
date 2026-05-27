@@ -556,6 +556,7 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
             scraper_url: "http://localhost:3000/scraper".to_string(),
             scraper_min_sessions: 100,
+            auto_select_max_concurrent: 5,
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -596,6 +597,7 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
             scraper_url: "http://localhost:3000/scraper".to_string(),
             scraper_min_sessions: 100,
+            auto_select_max_concurrent: 5,
         };
         let payload = LoginRequest {
             email: "otro@uniovi.es".to_string(),
@@ -633,6 +635,7 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
             scraper_url: "http://localhost:3000/scraper".to_string(),
             scraper_min_sessions: 100,
+            auto_select_max_concurrent: 5,
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -1013,6 +1016,7 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
             scraper_url: "http://localhost:3000/scraper".to_string(),
             scraper_min_sessions: 100,
+            auto_select_max_concurrent: 5,
         };
         let payload = LoginRequest {
             email: "DIEGO@UNIOVI.ES".to_string(),

@@ -55,7 +55,7 @@ pub async fn fetch_csv_from_scraper(scraper_url: &str) -> Result<String, AppErro
 /// 7. Liberar lock
 pub async fn run_sync(
     repo: &dyn ScraperRepository,
-    scraper_url: &str, // ← antes binary_path
+    scraper_url: &str,
     min_sessions: usize,
     hostname: &str,
 ) -> Result<SyncResult, AppError> {

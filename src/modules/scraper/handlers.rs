@@ -17,9 +17,11 @@ pub async fn trigger_sync(
     State(state): State<AppState>,
     AdminUser(admin): AdminUser,
 ) -> ApiResult<Json<SyncResponse>> {
+    let full_scraper_url = format!("{}/scrape", state.config.scraper_url);
+
     let result = service::run_sync(
         state.scraper_repo.as_ref(),
-        &state.config.scraper_url,
+        &full_scraper_url,
         state.config.scraper_min_sessions,
         "manual-trigger",
     )

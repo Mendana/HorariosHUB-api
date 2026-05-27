@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id\n            FROM auto_select_jobs\n            WHERE user_id = $1 AND status = 'processing'::auto_select_job_status\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "db0d39611f53d8afc17286f45a7e7dfa65b95d9eb261c8b2d8d2293491c3517a"
+}

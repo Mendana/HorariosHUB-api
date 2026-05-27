@@ -37,3 +37,26 @@ pub struct UserSelectionResponse {
     pub message: String,
     pub count: usize,
 }
+
+#[derive(Debug, Serialize)]
+pub struct AutoSelectResponse {
+    pub job_id: Uuid,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize)]
+pub enum AutoSelectStatus {
+    Processing,
+    Completed,
+    Failed,
+}
+
+impl AutoSelectStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutoSelectStatus::Processing => "processing",
+            AutoSelectStatus::Completed => "completed",
+            AutoSelectStatus::Failed => "failed",
+        }
+    }
+}

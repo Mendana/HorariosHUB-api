@@ -12,6 +12,24 @@ pub trait SubjectRepository: Send + Sync {
         user_id: Uuid,
         groups_ids: Vec<Uuid>,
     ) -> Result<(), AppError>;
+
+    async fn set_user_selection_by_subject_grp(
+        &self,
+        user_id: Uuid,
+        groups: Vec<(String, String)>,
+    ) -> Result<i32, AppError>;
+
+    async fn create_auto_select_job(&self, user_id: Uuid) -> Result<Uuid, AppError>;
+
+    async fn get_active_job_for_user(&self, user_id: Uuid) -> Result<Option<Uuid>, AppError>;
+
+    async fn complete_auto_select_job(
+        &self,
+        job_id: Uuid,
+        groups_selected: i32,
+    ) -> Result<(), AppError>;
+
+    async fn fail_auto_select_job(&self, job_id: Uuid, error: &str) -> Result<(), AppError>;
 }
 
 pub struct PgSubjectRepository {
@@ -78,6 +96,108 @@ impl SubjectRepository for PgSubjectRepository {
         }
 
         tx.commit().await?;
+
+        Ok(())
+    }
+
+    async fn set_user_selection_by_subject_grp(
+        &self,
+        user_id: Uuid,
+        groups: Vec<(String, String)>,
+    ) -> Result<i32, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query!(r#"DELETE FROM schedule WHERE user_id = $1"#, user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let count = groups.len() as i32;
+        for (subject, grp) in &groups {
+            sqlx::query!(
+                r#"
+                INSERT INTO schedule (user_id, subject, grp)
+                VALUES ($1, $2, $3)
+                ON CONFLICT DO NOTHING
+                "#,
+                user_id,
+                subject,
+                grp
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(count)
+    }
+
+    async fn create_auto_select_job(&self, user_id: Uuid) -> Result<Uuid, AppError> {
+        let row = sqlx::query!(
+            r#"
+            INSERT INTO auto_select_jobs (user_id, status)
+            VALUES ($1, 'processing'::auto_select_job_status)
+            RETURNING id
+            "#,
+            user_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row.id)
+    }
+
+    async fn get_active_job_for_user(&self, user_id: Uuid) -> Result<Option<Uuid>, AppError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id
+            FROM auto_select_jobs
+            WHERE user_id = $1 AND status = 'processing'::auto_select_job_status
+            LIMIT 1
+            "#,
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.id))
+    }
+
+    async fn complete_auto_select_job(
+        &self,
+        job_id: Uuid,
+        groups_selected: i32,
+    ) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE auto_select_jobs
+            SET status = 'completed'::auto_select_job_status,
+                groups_selected = $2,
+                finished_at = NOW()
+            WHERE id = $1
+            "#,
+            job_id,
+            groups_selected
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn fail_auto_select_job(&self, job_id: Uuid, error: &str) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE auto_select_jobs
+            SET status = 'failed'::auto_select_job_status,
+                error = $2,
+                finished_at = NOW()
+            WHERE id = $1
+            "#,
+            job_id,
+            error
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
