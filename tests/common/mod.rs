@@ -12,6 +12,10 @@ pub struct TestContext {
 }
 
 pub async fn setup() -> TestContext {
+    setup_with_scraper_url("http://localhost:4000").await
+}
+
+pub async fn setup_with_scraper_url(scraper_url: &str) -> TestContext {
     let container = Postgres::default()
         .start()
         .await
@@ -25,7 +29,7 @@ pub async fn setup() -> TestContext {
             .expect("No se pudo obtener el puerto")
     );
 
-    let (app, pool) = horarioshub_api::create_test_app(&db_url).await;
+    let (app, pool) = horarioshub_api::create_test_app_with_scraper(&db_url, scraper_url).await;
     let server = TestServer::new(app);
 
     TestContext {

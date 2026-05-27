@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE auto_select_jobs\n            SET status = 'failed'::auto_select_job_status,\n                error = $2,\n                finished_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce3c6c542d1accdb3803d9d2725f2dcfe458b8d03a14b4f50928a953a1de8539"
+}

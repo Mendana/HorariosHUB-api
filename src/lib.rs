@@ -11,6 +11,7 @@ pub mod utils;
 use axum::Router;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::Layer;
@@ -38,6 +39,7 @@ pub struct AppState {
     pub email: Arc<dyn EmailService>,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
+    pub auto_select_semaphore: Arc<Semaphore>,
 }
 
 pub async fn run() -> anyhow::Result<()> {
@@ -85,6 +87,8 @@ pub async fn run() -> anyhow::Result<()> {
     // 6. Caché
     let cache = Arc::new(cache::MokaCache::new(1_000, 600));
 
+    let auto_select_semaphore = Arc::new(Semaphore::new(config.auto_select_max_concurrent));
+
     // 7. Estado
     let state = AppState {
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
@@ -97,6 +101,7 @@ pub async fn run() -> anyhow::Result<()> {
         email,
         cache,
         config: Arc::new(config.clone()),
+        auto_select_semaphore,
     };
 
     // 8. Arrancar el scheduduler del cronjob
@@ -132,9 +137,11 @@ async fn start_scraper_scheduler(state: AppState) -> anyhow::Result<()> {
         Box::pin(async move {
             tracing::info!("Cronjob del scraper iniciado");
 
+            let full_scraper_url = format!("{}/scrape", state.config.scraper_url);
+
             match run_sync(
                 state.scraper_repo.as_ref(),
-                &state.config.scraper_url,
+                &full_scraper_url,
                 state.config.scraper_min_sessions,
                 "cronjob",
             )
@@ -167,6 +174,13 @@ async fn start_scraper_scheduler(state: AppState) -> anyhow::Result<()> {
 }
 
 pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
+    create_test_app_with_scraper(db_url, "http://localhost:4000").await
+}
+
+pub async fn create_test_app_with_scraper(
+    db_url: &str,
+    scraper_url: &str,
+) -> (axum::Router, sqlx::PgPool) {
     let pool = db::create_pool(db_url)
         .await
         .expect("No se pudo conectar a la BBDD de test");
@@ -205,9 +219,11 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
             smtp_password: "test".to_string(),
             smtp_from: "no-reply@horarioshub.com".to_string(),
             base_url: "http://localhost:3000".to_string(),
-            scraper_url: "http://localhost:4000/scrape".to_string(),
+            scraper_url: scraper_url.to_string(),
             scraper_min_sessions: 1000,
+            auto_select_max_concurrent: 5,
         }),
+        auto_select_semaphore: Arc::new(Semaphore::new(5)),
     };
 
     let app = modules::routes(false).with_state(state);

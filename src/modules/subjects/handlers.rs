@@ -1,4 +1,5 @@
 use axum::{Json, extract::State};
+use reqwest::StatusCode;
 
 use crate::{
     AppState,
@@ -6,7 +7,9 @@ use crate::{
     modules::{
         auth::middleware::AuthenticatedUser,
         subjects::{
-            models::{CatalogResponse, UserSelectionRequest, UserSelectionResponse},
+            models::{
+                AutoSelectResponse, CatalogResponse, UserSelectionRequest, UserSelectionResponse,
+            },
             service,
         },
     },
@@ -38,4 +41,21 @@ pub async fn set_user_selection_destructive(
     .await?;
 
     Ok(Json(response))
+}
+
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+pub async fn auto_select_subjects(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+) -> ApiResult<(StatusCode, Json<AutoSelectResponse>)> {
+    let response = service::auto_select_subjects(
+        state.subjects_repo.clone(),
+        state.auto_select_semaphore.clone(),
+        user.user.id,
+        &user.user.email,
+        &state.config.scraper_url,
+    )
+    .await?;
+
+    Ok((StatusCode::ACCEPTED, Json(response)))
 }
