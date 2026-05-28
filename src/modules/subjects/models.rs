@@ -45,6 +45,7 @@ pub struct AutoSelectResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AutoSelectStatus {
     Processing,
     Completed,
@@ -59,4 +60,19 @@ impl AutoSelectStatus {
             AutoSelectStatus::Failed => "failed",
         }
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct AutoSelectStatusResponse {
+    pub job_id: Uuid,
+    pub status: AutoSelectStatus,
+    pub groups_selected: Option<i32>,
+    pub error: Option<String>,
+}
+
+pub struct JobStatusRow {
+    pub id: Uuid,
+    pub status: String,
+    pub groups_selected: Option<i32>,
+    pub error: Option<String>,
 }

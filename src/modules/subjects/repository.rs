@@ -1,7 +1,10 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{errors::AppError, modules::subjects::models::SubjectGroupRow};
+use crate::{
+    errors::AppError,
+    modules::subjects::models::{JobStatusRow, SubjectGroupRow},
+};
 
 #[async_trait::async_trait]
 pub trait SubjectRepository: Send + Sync {
@@ -30,6 +33,11 @@ pub trait SubjectRepository: Send + Sync {
     ) -> Result<(), AppError>;
 
     async fn fail_auto_select_job(&self, job_id: Uuid, error: &str) -> Result<(), AppError>;
+
+    async fn get_latest_job_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<JobStatusRow>, AppError>;
 }
 
 pub struct PgSubjectRepository {
@@ -132,6 +140,18 @@ impl SubjectRepository for PgSubjectRepository {
     }
 
     async fn create_auto_select_job(&self, user_id: Uuid) -> Result<Uuid, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query!(
+            r#"
+            DELETE FROM auto_select_jobs
+            WHERE user_id = $1 AND status != 'processing'::auto_select_job_status
+            "#,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
         let row = sqlx::query!(
             r#"
             INSERT INTO auto_select_jobs (user_id, status)
@@ -140,8 +160,10 @@ impl SubjectRepository for PgSubjectRepository {
             "#,
             user_id
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await?;
+
+        tx.commit().await?;
 
         Ok(row.id)
     }
@@ -200,5 +222,26 @@ impl SubjectRepository for PgSubjectRepository {
         .await?;
 
         Ok(())
+    }
+
+    async fn get_latest_job_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<JobStatusRow>, AppError> {
+        let row = sqlx::query_as!(
+            JobStatusRow,
+            r#"
+            SELECT id, status::text AS "status!", groups_selected, error
+            FROM auto_select_jobs
+            WHERE user_id = $1
+            ORDER BY started_at DESC
+            LIMIT 1
+            "#,
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row)
     }
 }
