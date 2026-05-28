@@ -7,7 +7,8 @@ use crate::{
     errors::AppError,
     modules::subjects::{
         models::{
-            AutoSelectResponse, CatalogResponse, GroupEntry, SubjectEntry, UserSelectionResponse,
+            AutoSelectResponse, AutoSelectStatus, AutoSelectStatusResponse, CatalogResponse,
+            GroupEntry, JobStatusRow, SubjectEntry, UserSelectionResponse,
         },
         repository::SubjectRepository,
     },
@@ -129,6 +130,39 @@ pub async fn auto_select_subjects(
     Ok(AutoSelectResponse {
         job_id,
         status: "processing".to_string(),
+    })
+}
+
+pub async fn auto_select_subjects_status(
+    repo: &dyn SubjectRepository,
+    user_id: Uuid,
+) -> Result<AutoSelectStatusResponse, AppError> {
+    let JobStatusRow {
+        id: job_id,
+        status,
+        groups_selected,
+        error,
+    } = repo
+        .get_latest_job_for_user(user_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let status = match status.as_str() {
+        "processing" => AutoSelectStatus::Processing,
+        "completed" => AutoSelectStatus::Completed,
+        "failed" => AutoSelectStatus::Failed,
+        other => {
+            return Err(AppError::Internal(anyhow::anyhow!(
+                "Estado desconocido en auto_select_jobs: {other}"
+            )));
+        }
+    };
+
+    Ok(AutoSelectStatusResponse {
+        job_id,
+        status,
+        groups_selected,
+        error,
     })
 }
 

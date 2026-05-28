@@ -8,7 +8,8 @@ use crate::{
         auth::middleware::AuthenticatedUser,
         subjects::{
             models::{
-                AutoSelectResponse, CatalogResponse, UserSelectionRequest, UserSelectionResponse,
+                AutoSelectResponse, AutoSelectStatusResponse, CatalogResponse,
+                UserSelectionRequest, UserSelectionResponse,
             },
             service,
         },
@@ -58,4 +59,15 @@ pub async fn auto_select_subjects(
     .await?;
 
     Ok((StatusCode::ACCEPTED, Json(response)))
+}
+
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+pub async fn get_auto_selection_status(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+) -> ApiResult<(StatusCode, Json<AutoSelectStatusResponse>)> {
+    let response =
+        service::auto_select_subjects_status(state.subjects_repo.as_ref(), user.user.id).await?;
+
+    Ok((StatusCode::OK, Json(response)))
 }

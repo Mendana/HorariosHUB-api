@@ -519,6 +519,309 @@ async fn auto_select_background_reemplaza_schedule_existente() {
     );
 }
 
+// ─── GET /subjects/auto-select/status ─────────────────────────────────────────
+
+#[tokio::test]
+async fn status_devuelve_401_sin_autenticar() {
+    let ctx = setup().await;
+    let response = ctx.server.get("/subjects/auto-select/status").await;
+    response.assert_status(StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn status_devuelve_404_si_no_hay_jobs() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "uo901234@uniovi.es", "student").await;
+
+    let response = ctx
+        .server
+        .get("/subjects/auto-select/status")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    response.assert_status(StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn status_devuelve_processing_cuando_hay_job_activo() {
+    let ctx = setup().await;
+    let email = "uo901235@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status)
+        SELECT id, 'processing'::auto_select_job_status FROM users WHERE email = $1
+        "#,
+        email
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .get("/subjects/auto-select/status")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(body["status"], "processing");
+    assert!(body["job_id"].is_string());
+    assert!(body["groups_selected"].is_null());
+    assert!(body["error"].is_null());
+}
+
+#[tokio::test]
+async fn status_devuelve_completed_con_groups_selected() {
+    let ctx = setup().await;
+    let email = "uo901236@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status, groups_selected, finished_at)
+        SELECT id, 'completed'::auto_select_job_status, 5, NOW() FROM users WHERE email = $1
+        "#,
+        email
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .get("/subjects/auto-select/status")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(body["status"], "completed");
+    assert_eq!(body["groups_selected"], 5);
+    assert!(body["error"].is_null());
+}
+
+#[tokio::test]
+async fn status_devuelve_failed_con_mensaje_de_error() {
+    let ctx = setup().await;
+    let email = "uo901237@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status, error, finished_at)
+        SELECT id, 'failed'::auto_select_job_status, 'El scraper no respondió', NOW()
+        FROM users WHERE email = $1
+        "#,
+        email
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .get("/subjects/auto-select/status")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(body["status"], "failed");
+    assert_eq!(body["error"], "El scraper no respondió");
+    assert!(body["groups_selected"].is_null());
+}
+
+#[tokio::test]
+async fn status_no_devuelve_jobs_de_otros_usuarios() {
+    let ctx = setup().await;
+    let email_a = "uo901239@uniovi.es";
+    let email_b = "uo901240@uniovi.es";
+    let token_b = login_as(&ctx, email_b, "student").await;
+
+    login_as(&ctx, email_a, "student").await;
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status)
+        SELECT id, 'processing'::auto_select_job_status FROM users WHERE email = $1
+        "#,
+        email_a
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .get("/subjects/auto-select/status")
+        .add_header("Authorization", format!("Bearer {token_b}"))
+        .await;
+
+    response.assert_status(StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn status_refleja_actualizacion_del_background() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/auto-select/uo\d{4,6}$"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("ALG,T.1\n"))
+        .mount(&mock_server)
+        .await;
+
+    let ctx = setup_with_scraper_url(&mock_server.uri()).await;
+    let email = "uo901241@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    sqlx::query!(
+        "INSERT INTO subject_groups (subject, grp) VALUES ('ALG', 'T.1') ON CONFLICT DO NOTHING"
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let post_response = ctx
+        .server
+        .post("/subjects/auto-select")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    let job_id = extraer_job_id(&post_response.json::<serde_json::Value>());
+    esperar_status_job(&ctx.pool, job_id, "completed").await;
+
+    let response = ctx
+        .server
+        .get("/subjects/auto-select/status")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(body["status"], "completed");
+    assert_eq!(body["groups_selected"], 1);
+    assert_eq!(body["job_id"].as_str().unwrap(), job_id.to_string());
+}
+
+// ─── Limpieza: jobs terminales se eliminan al crear uno nuevo ─────────────────
+
+#[tokio::test]
+async fn nuevo_job_elimina_completed_anterior() {
+    let ctx = setup().await;
+    let email = "uo901242@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status, groups_selected, finished_at)
+        SELECT id, 'completed'::auto_select_job_status, 3, NOW() FROM users WHERE email = $1
+        "#,
+        email
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    ctx.server
+        .post("/subjects/auto-select")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await
+        .assert_status(StatusCode::ACCEPTED);
+
+    let count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM auto_select_jobs j JOIN users u ON u.id = j.user_id WHERE u.email = $1",
+        email
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(
+        count, 1,
+        "el completed anterior debe borrarse al crear un job nuevo"
+    );
+}
+
+#[tokio::test]
+async fn nuevo_job_elimina_failed_anterior() {
+    let ctx = setup().await;
+    let email = "uo901243@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status, error, finished_at)
+        SELECT id, 'failed'::auto_select_job_status, 'error previo', NOW()
+        FROM users WHERE email = $1
+        "#,
+        email
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    ctx.server
+        .post("/subjects/auto-select")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await
+        .assert_status(StatusCode::ACCEPTED);
+
+    let count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM auto_select_jobs j JOIN users u ON u.id = j.user_id WHERE u.email = $1",
+        email
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(
+        count, 1,
+        "el failed anterior debe borrarse al crear un job nuevo"
+    );
+}
+
+#[tokio::test]
+async fn limpieza_no_afecta_jobs_de_otros_usuarios() {
+    let ctx = setup().await;
+    let email_a = "uo901244@uniovi.es";
+    let email_b = "uo901245@uniovi.es";
+    let token_a = login_as(&ctx, email_a, "student").await;
+    login_as(&ctx, email_b, "student").await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO auto_select_jobs (user_id, status, finished_at)
+        SELECT id, 'completed'::auto_select_job_status, NOW()
+        FROM users WHERE email = $1
+        "#,
+        email_b
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    ctx.server
+        .post("/subjects/auto-select")
+        .add_header("Authorization", format!("Bearer {token_a}"))
+        .await
+        .assert_status(StatusCode::ACCEPTED);
+
+    let count_b: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM auto_select_jobs j JOIN users u ON u.id = j.user_id WHERE u.email = $1",
+        email_b
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(count_b, 1, "la limpieza de A no debe borrar jobs de B");
+}
+
 // ─── Aislamiento entre usuarios ───────────────────────────────────────────────
 
 #[tokio::test]

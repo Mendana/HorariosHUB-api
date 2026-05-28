@@ -12,7 +12,11 @@ use axum::{
 pub fn routes(with_rate_limit: bool) -> Router<AppState> {
     let catalog_and_selection = Router::new()
         .route("/catalog", get(handlers::get_catalog_by_user))
-        .route("/selection", post(handlers::set_user_selection_destructive));
+        .route("/selection", post(handlers::set_user_selection_destructive))
+        .route(
+            "/auto-select/status",
+            get(handlers::get_auto_selection_status),
+        );
 
     let auto_select = Router::new().route("/auto-select", post(handlers::auto_select_subjects));
 
