@@ -6,14 +6,24 @@ pub mod jwt;
 pub mod modules;
 pub mod seed;
 pub mod services;
+pub mod utils;
 
 use axum::Router;
+use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
+use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::modules::auth::repository::{PgUserRepository, UserRepository};
+use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
+use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
+use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
+use crate::modules::scraper::repository::{PgScraperRepository, ScraperRepository};
+use crate::modules::scraper::service::run_sync;
+use crate::modules::subjects::repository::{PgSubjectRepository, SubjectRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
 // Estado compartido que Axum inyecta en cada handler
@@ -21,9 +31,15 @@ use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailS
 pub struct AppState {
     pub pool: Arc<sqlx::PgPool>,
     pub user_repo: Arc<dyn UserRepository>,
+    pub schedule_repo: Arc<dyn ScheduleRepository>,
+    pub class_repo: Arc<dyn ClassRepository>,
+    pub proposals_repo: Arc<dyn ProposalRepository>,
+    pub subjects_repo: Arc<dyn SubjectRepository>,
+    pub scraper_repo: Arc<dyn ScraperRepository>,
     pub email: Arc<dyn EmailService>,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
+    pub auto_select_semaphore: Arc<Semaphore>,
 }
 
 pub async fn run() -> anyhow::Result<()> {
@@ -71,33 +87,100 @@ pub async fn run() -> anyhow::Result<()> {
     // 6. Caché
     let cache = Arc::new(cache::MokaCache::new(1_000, 600));
 
+    let auto_select_semaphore = Arc::new(Semaphore::new(config.auto_select_max_concurrent));
+
     // 7. Estado
     let state = AppState {
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
+        class_repo: Arc::new(PgClassRepository::new(pool.clone())),
+        proposals_repo: Arc::new(PgProposalRepository::new(pool.clone())),
+        schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
+        subjects_repo: Arc::new(PgSubjectRepository::new(pool.clone())),
+        scraper_repo: Arc::new(PgScraperRepository::new(pool.clone())),
         pool: Arc::new(pool),
         email,
         cache,
         config: Arc::new(config.clone()),
+        auto_select_semaphore,
     };
 
-    // 7. Router
+    // 8. Arrancar el scheduduler del cronjob
+    start_scraper_scheduler(state.clone()).await?;
+
+    // 9. Router
     let app = Router::new()
-        .merge(modules::routes())
+        .merge(modules::routes(true))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    // 8. Servidor
+    // 10. Servidor
     let addr = format!("0.0.0.0:{}", config.server_port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Servidor escuchando en {}", addr);
 
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Configura un cronjob que ejecuta el scraper todos los días a las 5 AM
+async fn start_scraper_scheduler(state: AppState) -> anyhow::Result<()> {
+    let scheduler = JobScheduler::new().await?;
+
+    let job = Job::new_async("0 0 5 * * *", move |_uuid, _lock| {
+        let state = state.clone();
+        Box::pin(async move {
+            tracing::info!("Cronjob del scraper iniciado");
+
+            let full_scraper_url = format!("{}/scrape", state.config.scraper_url);
+
+            match run_sync(
+                state.scraper_repo.as_ref(),
+                &full_scraper_url,
+                state.config.scraper_min_sessions,
+                "cronjob",
+            )
+            .await
+            {
+                Ok(result) if result.aborted => {
+                    tracing::warn!(reason = ?result.abort_reason, "Cronjob del scraper abortado");
+                }
+                Ok(result) => {
+                    tracing::info!(
+                        sessions_inserted = result.sessions_inserted,
+                        changes_applied = result.changes_applied,
+                        pending_rejected = result.pending_rejected,
+                        rejected_archived = result.rejected_archived,
+                        "Cronjob del scraper finalizado exitosamente"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(error = ?e, "Error ejecutando cronjob del scraper");
+                }
+            }
+        })
+    })?;
+
+    scheduler.add(job).await?;
+    scheduler.start().await?;
+
+    tracing::info!("Scheduler del scraper iniciado, próxima ejecución a las 5 AM");
     Ok(())
 }
 
 pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
+    create_test_app_with_scraper(db_url, "http://localhost:4000").await
+}
+
+pub async fn create_test_app_with_scraper(
+    db_url: &str,
+    scraper_url: &str,
+) -> (axum::Router, sqlx::PgPool) {
     let pool = db::create_pool(db_url)
         .await
         .expect("No se pudo conectar a la BBDD de test");
@@ -109,10 +192,19 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
 
     let pool = Arc::new(pool);
     let user_repo = Arc::new(PgUserRepository::new((*pool).clone()));
-
+    let class_repo = Arc::new(PgClassRepository::new((*pool).clone()));
+    let proposals_repo = Arc::new(PgProposalRepository::new((*pool).clone()));
+    let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
+    let subject_repo = Arc::new(PgSubjectRepository::new((*pool).clone()));
+    let scraper_repo = Arc::new(PgScraperRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
         user_repo,
+        class_repo,
+        proposals_repo,
+        schedule_repo,
+        subjects_repo: subject_repo,
+        scraper_repo,
         email: Arc::new(MockEmailService),
         cache: Arc::new(cache::MokaCache::new(100, 60)),
         config: Arc::new(config::Config {
@@ -127,10 +219,14 @@ pub async fn create_test_app(db_url: &str) -> (axum::Router, sqlx::PgPool) {
             smtp_password: "test".to_string(),
             smtp_from: "no-reply@horarioshub.com".to_string(),
             base_url: "http://localhost:3000".to_string(),
+            scraper_url: scraper_url.to_string(),
+            scraper_min_sessions: 1000,
+            auto_select_max_concurrent: 5,
         }),
+        auto_select_semaphore: Arc::new(Semaphore::new(5)),
     };
 
-    let app = modules::routes().with_state(state);
+    let app = modules::routes(false).with_state(state);
     let pool_for_tests = (*pool).clone();
     (app, pool_for_tests)
 }

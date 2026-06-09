@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE auto_select_jobs\n            SET status = 'completed'::auto_select_job_status,\n                groups_selected = $2,\n                finished_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5fa0df7bc0765e2544859a00bc5d79e259deb4b5ddf6ff004b93607782e90e5b"
+}

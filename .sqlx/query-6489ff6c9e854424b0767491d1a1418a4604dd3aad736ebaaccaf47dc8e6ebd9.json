@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT sg.id, sg.subject, sg.grp, (s.user_id IS NOT NULL) AS \"selected!\"\n            FROM subject_groups sg\n            LEFT JOIN schedule s ON sg.subject = s.subject AND s.grp = sg.grp AND s.user_id = $1\n            ORDER BY sg.subject, sg.grp\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "grp",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "selected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "6489ff6c9e854424b0767491d1a1418a4604dd3aad736ebaaccaf47dc8e6ebd9"
+}

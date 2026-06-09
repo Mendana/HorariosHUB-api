@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO schedule (user_id, subject, grp)\n        SELECT id, $2, $3 FROM users WHERE email = $1\n        ON CONFLICT DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61e2a23bb60770fd340226693d9d9eaeb92f9cf0094c4b909923d35e14f1de6a"
+}

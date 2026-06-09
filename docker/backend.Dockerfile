@@ -15,7 +15,7 @@ RUN cargo build --release
 # Imagen final
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
-  ca-certificates libssl3 && \
+  ca-certificates libssl3 libicu72 && \
   rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/horarioshub-api .

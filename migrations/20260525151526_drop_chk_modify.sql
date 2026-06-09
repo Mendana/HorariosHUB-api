@@ -1,0 +1,1 @@
+ALTER TABLE changes DROP CONSTRAINT chk_modify;
