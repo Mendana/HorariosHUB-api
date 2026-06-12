@@ -9,6 +9,7 @@ pub mod services;
 pub mod utils;
 
 use axum::Router;
+use axum::http::{HeaderValue, Method, header};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -108,11 +109,23 @@ pub async fn run() -> anyhow::Result<()> {
     start_scraper_scheduler(state.clone()).await?;
 
     // 9. Router
+    let cors = CorsLayer::new()
+        .allow_origin(config.allowed_origin.parse::<HeaderValue>().unwrap())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([header::CONTENT_TYPE])
+        .allow_credentials(true);
+
     let app = Router::new()
         .merge(modules::routes(true))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
-        .layer(CorsLayer::permissive())
+        .layer(cors)
         .with_state(state);
 
     // 10. Servidor
@@ -222,6 +235,7 @@ pub async fn create_test_app_with_scraper(
             scraper_url: scraper_url.to_string(),
             scraper_min_sessions: 1000,
             auto_select_max_concurrent: 5,
+            allowed_origin: "http://localhost:3000".to_string(),
         }),
         auto_select_semaphore: Arc::new(Semaphore::new(5)),
     };

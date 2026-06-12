@@ -17,6 +17,7 @@ pub struct Config {
     pub scraper_url: String,
     pub scraper_min_sessions: usize,
     pub auto_select_max_concurrent: usize,
+    pub allowed_origin: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +61,8 @@ impl Config {
             auto_select_max_concurrent: env::var("AUTO_SELECT_MAX_CONCURRENT")
                 .unwrap_or_else(|_| "5".into())
                 .parse()?,
+            allowed_origin: env::var("ALLOWED_ORIGIN")
+                .unwrap_or_else(|_| "http://localhost:3000".into()),
         })
     }
 
