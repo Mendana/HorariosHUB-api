@@ -19,6 +19,7 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
+use crate::modules::health::repository::{HealthRepository, PgHealthRepository};
 use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
 use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
 use crate::modules::scraper::repository::{PgScraperRepository, ScraperRepository};
@@ -31,6 +32,7 @@ use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailS
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Arc<sqlx::PgPool>,
+    pub health_repo: Arc<dyn HealthRepository>,
     pub user_repo: Arc<dyn UserRepository>,
     pub schedule_repo: Arc<dyn ScheduleRepository>,
     pub class_repo: Arc<dyn ClassRepository>,
@@ -92,6 +94,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // 7. Estado
     let state = AppState {
+        health_repo: Arc::new(PgHealthRepository::new(pool.clone())),
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
         class_repo: Arc::new(PgClassRepository::new(pool.clone())),
         proposals_repo: Arc::new(PgProposalRepository::new(pool.clone())),
@@ -212,6 +215,7 @@ pub async fn create_test_app_with_scraper(
     let scraper_repo = Arc::new(PgScraperRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
+        health_repo: Arc::new(PgHealthRepository::new((*pool).clone())),
         user_repo,
         class_repo,
         proposals_repo,
