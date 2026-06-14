@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use uuid::Uuid;
@@ -10,10 +10,11 @@ use crate::{
     AppState,
     errors::{ApiResult, AppError},
     modules::{
-        auth::middleware::ProfessorOrAbove,
+        auth::middleware::{AuthenticatedUser, ProfessorOrAbove},
         classes::{
             models::{
-                CreateClassRequest, CreateClassResponse, DeleteClassResponse, UpdateClassRequest,
+                CreateClassRequest, CreateClassResponse, DeleteClassResponse,
+                ListClassesQueryParams, ListClassesResponse, UpdateClassRequest,
             },
             service,
         },
@@ -67,6 +68,7 @@ pub async fn update_class(
 }
 
 /// DELETE /api/classes/{id}
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id))]
 pub async fn delete_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -81,4 +83,14 @@ pub async fn delete_class(
     .await?;
 
     Ok(Json(response))
+}
+
+/// GET api/classes
+pub async fn get_classes(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+    Query(params): Query<ListClassesQueryParams>,
+) -> ApiResult<(StatusCode, Json<ListClassesResponse>)> {
+    let response = service::get_classes(state.class_repo.as_ref(), params).await?;
+    Ok((StatusCode::OK, Json(response)))
 }

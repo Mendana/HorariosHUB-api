@@ -6,12 +6,15 @@ pub mod service;
 use crate::AppState;
 use axum::{
     Router,
-    routing::{patch, post},
+    routing::{get, patch},
 };
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/classes", post(handlers::create_class))
+        .route(
+            "/classes",
+            get(handlers::get_classes).post(handlers::create_class),
+        )
         .route(
             "/classes/{id}",
             patch(handlers::update_class).delete(handlers::delete_class),

@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc, Weekday};
 use uuid::Uuid;
 
 use crate::{
@@ -6,8 +6,10 @@ use crate::{
     modules::{
         classes::{
             models::{
-                CreateClassRequest, CreateClassResponse, DeleteClassResponse, Session,
-                UpdateClassRequest, UpdateClassResponse,
+                ClassItem, CreateClassRequest, CreateClassResponse, DeleteClassResponse,
+                ListClassesQueryParams, ListClassesResponse, ListClassesSortDirection,
+                ListClassesSortOption, ListSessionsParams, Session, UpdateClassRequest,
+                UpdateClassResponse,
             },
             repository::ClassRepository,
         },
@@ -210,6 +212,76 @@ pub async fn delete_class(
     Ok(DeleteClassResponse {
         message: "Clase eliminada".into(),
     })
+}
+
+pub async fn get_classes(
+    class_repo: &dyn ClassRepository,
+    params: ListClassesQueryParams,
+) -> Result<ListClassesResponse, AppError> {
+    let (week_start, week_end) = match &params.week {
+        Some(w) => {
+            let (start, end) = parse_iso_week(w)?;
+            (Some(start), Some(end))
+        }
+        None => (None, None),
+    };
+
+    let page = params.page.unwrap_or(1).max(1) as i64;
+    let limit = params.limit.unwrap_or(20).min(100) as i64;
+    let offset = (page - 1) * limit;
+
+    let order_col = match params.sort.unwrap_or(ListClassesSortOption::Date) {
+        ListClassesSortOption::Name => "subject",
+        ListClassesSortOption::Type => "grp",
+        ListClassesSortOption::Date => "starts_at",
+    };
+    let order_dir = match params.dir.unwrap_or(ListClassesSortDirection::Asc) {
+        ListClassesSortDirection::Asc => "ASC",
+        ListClassesSortDirection::Desc => "DESC",
+    };
+
+    let (rows, total) = class_repo
+        .list_sessions(ListSessionsParams {
+            search: params.search.as_deref(),
+            week_start,
+            week_end,
+            order_col,
+            order_dir,
+            limit,
+            offset,
+        })
+        .await?;
+
+    let classes = rows
+        .into_iter()
+        .map(|r| ClassItem {
+            id: r.id,
+            subject: r.subject,
+            subject_type: r.grp,
+            classroom: r.classroom,
+            start_time: r.starts_at,
+            end_time: r.starts_at + Duration::minutes(r.duration_min as i64),
+        })
+        .collect();
+
+    Ok(ListClassesResponse { classes, total })
+}
+
+fn parse_iso_week(week: &str) -> Result<(chrono::DateTime<Utc>, chrono::DateTime<Utc>), AppError> {
+    let err =
+        || AppError::BadRequest("El formato de semana debe ser YYYY-Www (ej: 2026-W24)".into());
+
+    let (year_str, week_str) = week.split_once("-W").ok_or_else(err)?;
+    let year: i32 = year_str.parse().map_err(|_| err())?;
+    let week_num: u32 = week_str.parse().map_err(|_| err())?;
+
+    let monday = NaiveDate::from_isoywd_opt(year, week_num, Weekday::Mon).ok_or_else(err)?;
+    let next_monday = monday + Duration::days(7);
+
+    Ok((
+        Utc.from_utc_datetime(&monday.and_time(NaiveTime::MIN)),
+        Utc.from_utc_datetime(&next_monday.and_time(NaiveTime::MIN)),
+    ))
 }
 
 fn build_response(session: Session, end_time: NaiveTime) -> CreateClassResponse {
