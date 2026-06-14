@@ -1,10 +1,14 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 
 use crate::{
     AppState,
     errors::ApiResult,
     modules::{
-        auth::middleware::ProfessorOrAbove,
+        auth::middleware::{AdminUser, ProfessorOrAbove},
         users::{models::UsersListResponse, service},
     },
 };
@@ -21,4 +25,19 @@ pub async fn get_all_users(
     let users = service::get_all_users(state.user_repo.as_ref()).await?;
 
     Ok((StatusCode::OK, Json(UsersListResponse { users })))
+}
+
+#[tracing::instrument(
+    name = "Change user role",
+    skip(state, admin),
+    fields(user_email = %admin.email, user_role = ?admin.role)
+)]
+pub async fn change_user_role(
+    State(state): State<AppState>,
+    AdminUser(admin): AdminUser,
+    Path((identifier, role)): Path<(String, String)>,
+) -> ApiResult<StatusCode> {
+    service::change_user_role(state.user_repo.as_ref(), &identifier, &role).await?;
+
+    Ok(StatusCode::OK)
 }
