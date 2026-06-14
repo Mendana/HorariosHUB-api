@@ -41,3 +41,18 @@ pub async fn change_user_role(
 
     Ok(StatusCode::OK)
 }
+
+#[tracing::instrument(
+    name = "Delete user",
+    skip(state, admin),
+    fields(user_email = %admin.email, user_role = ?admin.role)
+)]
+pub async fn delete_user(
+    State(state): State<AppState>,
+    AdminUser(admin): AdminUser,
+    Path(identifier): Path<String>,
+) -> ApiResult<StatusCode> {
+    service::delete_user(state.user_repo.as_ref(), &identifier).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}

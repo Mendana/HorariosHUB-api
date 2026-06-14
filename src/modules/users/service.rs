@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use crate::{
     errors::AppError,
     modules::users::{
@@ -32,7 +34,7 @@ pub async fn change_user_role(
         _ => return Err(AppError::BadRequest(format!("Invalid role: {role}"))),
     };
 
-    let identifier = match uuid::Uuid::parse_str(identifier) {
+    let identifier = match Uuid::parse_str(identifier) {
         Ok(uuid) => uuid,
         Err(_) => {
             return Err(AppError::BadRequest(format!(
@@ -42,6 +44,21 @@ pub async fn change_user_role(
     };
 
     repo.change_user_role(identifier, new_role).await?;
+
+    Ok(())
+}
+
+pub async fn delete_user(repo: &dyn UserRepository, identifier: &str) -> Result<(), AppError> {
+    let identifier = match Uuid::parse_str(identifier) {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return Err(AppError::BadRequest(format!(
+                "Invalid identifier: {identifier}"
+            )));
+        }
+    };
+
+    repo.delete_user(identifier).await?;
 
     Ok(())
 }
@@ -121,6 +138,12 @@ mod tests {
             _user_id: Uuid,
             _new_role: UserRole,
         ) -> Result<(), AppError> {
+            if self.error {
+                return Err(AppError::Internal(anyhow::anyhow!("db error")));
+            }
+            Ok(())
+        }
+        async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
             if self.error {
                 return Err(AppError::Internal(anyhow::anyhow!("db error")));
             }
@@ -274,6 +297,9 @@ mod tests {
         async fn change_user_role(&self, _: Uuid, _: UserRole) -> Result<(), AppError> {
             Err(AppError::NotFound)
         }
+        async fn delete_user(&self, _: Uuid) -> Result<(), AppError> {
+            Err(AppError::NotFound)
+        }
     }
 
     #[tokio::test]
@@ -281,6 +307,48 @@ mod tests {
         let repo = MockNotFoundRepository;
         let id = Uuid::new_v4().to_string();
         let result = change_user_role(&repo, &id, "admin").await;
+        assert!(matches!(result, Err(AppError::NotFound)));
+    }
+
+    // ─── delete_user ──────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn delete_user_returns_ok_for_valid_uuid() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: false,
+        };
+        let id = Uuid::new_v4().to_string();
+        let result = delete_user(&repo, &id).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn delete_user_rejects_invalid_uuid() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: false,
+        };
+        let result = delete_user(&repo, "not-a-uuid").await;
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn delete_user_propagates_repo_error() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: true,
+        };
+        let id = Uuid::new_v4().to_string();
+        let result = delete_user(&repo, &id).await;
+        assert!(matches!(result, Err(AppError::Internal(_))));
+    }
+
+    #[tokio::test]
+    async fn delete_user_propagates_not_found() {
+        let repo = MockNotFoundRepository;
+        let id = Uuid::new_v4().to_string();
+        let result = delete_user(&repo, &id).await;
         assert!(matches!(result, Err(AppError::NotFound)));
     }
 }

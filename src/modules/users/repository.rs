@@ -119,6 +119,13 @@ pub trait UserRepository: Send + Sync {
     /// - [`AppError::Internal`] para errores en la actualización en la base de datos
     /// - [`AppError::NotFound`] si no existe un usuario con el identificador
     async fn change_user_role(&self, identifier: Uuid, new_role: UserRole) -> Result<(), AppError>;
+
+    /// Elimina el usuario con el identificador dado de la base de datos
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la eliminación en la base de datos
+    /// - [`AppError::NotFound`] si no existe un usuario con el identificador dado
+    async fn delete_user(&self, identifier: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgUserRepository {
@@ -363,6 +370,18 @@ impl UserRepository for PgUserRepository {
         )
         .execute(&self.pool)
         .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    async fn delete_user(&self, identifier: Uuid) -> Result<(), AppError> {
+        let result = sqlx::query!("DELETE FROM users WHERE id = $1", identifier)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound);
