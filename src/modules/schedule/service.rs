@@ -3,7 +3,6 @@ use chrono::{DateTime, Duration, Months, NaiveDate, NaiveTime, TimeZone, Utc};
 use crate::{
     errors::AppError,
     modules::{
-        auth::{models::User, repository::UserRepository},
         schedule::{
             models::{
                 CopyScheduleResponse, CopyScheduleUsers, GetScheduleResponse, ScheduleSubject,
@@ -11,6 +10,7 @@ use crate::{
             },
             repository::ScheduleRepository,
         },
+        users::{models::User, repository::UserRepository},
     },
 };
 

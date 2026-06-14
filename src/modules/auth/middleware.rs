@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::errors::AppError;
 use crate::jwt;
-use crate::modules::auth::models::{User, UserRole};
+use crate::modules::users::models::{User, UserRole};
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::header::{AUTHORIZATION, COOKIE};
 use axum::http::request::Parts;

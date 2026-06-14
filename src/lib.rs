@@ -18,13 +18,13 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLay
 use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::modules::auth::repository::{PgUserRepository, UserRepository};
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
 use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
 use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
 use crate::modules::scraper::repository::{PgScraperRepository, ScraperRepository};
 use crate::modules::scraper::service::run_sync;
 use crate::modules::subjects::repository::{PgSubjectRepository, SubjectRepository};
+use crate::modules::users::repository::{PgUserRepository, UserRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
 // Estado compartido que Axum inyecta en cada handler
