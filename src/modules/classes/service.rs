@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc, Weekday};
+use chrono::{Duration, NaiveDate, NaiveTime, TimeZone, Utc, Weekday};
 use uuid::Uuid;
 
 use crate::{
@@ -6,10 +6,9 @@ use crate::{
     modules::{
         classes::{
             models::{
-                ClassItem, CreateClassRequest, CreateClassResponse, DeleteClassResponse,
-                ListClassesQueryParams, ListClassesResponse, ListClassesSortDirection,
-                ListClassesSortOption, ListSessionsParams, Session, UpdateClassRequest,
-                UpdateClassResponse,
+                ClassItem, CreateClassRequest, DeleteClassResponse, ListClassesQueryParams,
+                ListClassesResponse, ListClassesSortDirection, ListClassesSortOption,
+                ListSessionsParams, Session, UpdateClassRequest,
             },
             repository::ClassRepository,
         },
@@ -20,43 +19,26 @@ use crate::{
     },
 };
 
-/// Crea una nueva clase (sesión) en el sistema.
-///
-/// # Flujo
-/// 1. Parsea fecha y hora de inicio
-/// 2. Calcula el end_time a partir de durationMinutes
-/// 3. Upsert del subjectGroup si no existe
-/// 4. Inserta la sesón con source manual
-///
-/// # Errores
-/// - [`AppError::BadRequest`] si la fecha o el formato de hora son inválidos
 pub async fn create_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
     payload: CreateClassRequest,
     created_by: Uuid,
-) -> Result<CreateClassResponse, AppError> {
-    let date = NaiveDate::from_ymd_opt(payload.date.year, payload.date.month, payload.date.day)
-        .ok_or_else(|| AppError::BadRequest("Fecha inválida".into()))?;
-
-    let start_time = NaiveTime::parse_from_str(&payload.start_time, "%H:%M").map_err(|_| {
-        AppError::BadRequest("Formato de hora de inicio inválido, usar HH:MM".into())
-    })?;
-
-    let end_time = start_time + Duration::minutes(payload.duration_minutes as i64);
-
-    let starts_at = Utc.from_utc_datetime(&NaiveDateTime::new(date, start_time));
+) -> Result<ClassItem, AppError> {
+    let duration_min = (payload.end_time - payload.start_time).num_minutes();
+    validate_duration(duration_min)?;
+    let duration_min = duration_min as i32;
 
     class_repo
-        .upsert_subject_group(&payload.name, &payload.r#type)
+        .upsert_subject_group(&payload.subject, &payload.subject_type)
         .await?;
 
     let session = class_repo
         .create_session(
-            &payload.name,
-            &payload.r#type,
-            starts_at,
-            payload.duration_minutes,
+            &payload.subject,
+            &payload.subject_type,
+            payload.start_time,
+            duration_min,
             payload.classroom.as_deref(),
             created_by,
         )
@@ -79,73 +61,41 @@ pub async fn create_class(
         })
         .await?;
 
-    Ok(build_response(session, end_time))
+    Ok(session_to_class_item(session))
 }
 
-/// Modifica una sesión existente
-///
-/// Marca automáticamente is_overridden a true para que el scrapper sepa que hay
-/// cambios manuales aplicados y no sobreescriba sin gestionar el conflicto
-///
-/// # Errores
-/// - [`AppError::BadRequest`] si la fecha o el formato de hora son inválidos
-/// - [`AppError::NotFound`] si no se encuentra la sesión a modificar
 pub async fn update_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
     id: Uuid,
     professor_id: Uuid,
     payload: UpdateClassRequest,
-) -> Result<UpdateClassResponse, AppError> {
+) -> Result<ClassItem, AppError> {
     let existing = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
 
-    // Parsear fecha (si viene)
-    let new_date = payload
-        .date
-        .as_ref()
-        .map(|d| {
-            NaiveDate::from_ymd_opt(d.year, d.month, d.day)
-                .ok_or_else(|| AppError::BadRequest("Fecha inválida".into()))
-        })
-        .transpose()?;
-
-    // Parsear hora de inicio (si viene)
-    let new_start_time = payload
-        .start_time
-        .as_deref()
-        .map(|t| {
-            NaiveTime::parse_from_str(t, "%H:%M").map_err(|_| {
-                AppError::BadRequest("Formato de hora de inicio inválido, usar HH:MM".into())
-            })
-        })
-        .transpose()?;
-
-    // Calcular starts_at si cambia fecha u hora
-    let new_starts_at = match (new_date, new_start_time) {
-        (None, None) => None,
-        (date, time) => {
-            let date = date.unwrap_or_else(|| existing.starts_at.date_naive());
-            let time = time.unwrap_or_else(|| existing.starts_at.time());
-            Some(Utc.from_utc_datetime(&NaiveDateTime::new(date, time)))
+    let new_starts_at = payload.start_time;
+    let new_duration_min = match (payload.start_time, payload.end_time) {
+        (Some(start), Some(end)) => {
+            let mins = (end - start).num_minutes();
+            validate_duration(mins)?;
+            Some(mins as i32)
         }
+        (Some(_start), None) => None, // mantener duración original
+        (None, Some(end)) => {
+            let mins = (end - existing.starts_at).num_minutes();
+            validate_duration(mins)?;
+            Some(mins as i32)
+        }
+        (None, None) => None,
     };
-
-    // Calcular duración efectiva (si viene nueva duración usarla, sino mantener la existente)
-    let effective_duration = payload.duration_minutes.unwrap_or(existing.duration_min);
-
-    // Calcular end_time a partir de starts_at efectiva y duración efectiva
-    let effective_start = new_starts_at.unwrap_or(existing.starts_at);
-
-    // Calcular end_time a partir de effective_start y effective_duration
-    let end_time = effective_start.time() + Duration::minutes(effective_duration as i64);
 
     let session = class_repo
         .update_session(
             id,
-            payload.name.as_deref(),
-            payload.r#type.as_deref(),
+            payload.subject.as_deref(),
+            payload.subject_type.as_deref(),
             new_starts_at,
-            payload.duration_minutes,
+            new_duration_min,
             payload.classroom.as_deref(),
         )
         .await?;
@@ -173,7 +123,7 @@ pub async fn update_class(
         })
         .await?;
 
-    Ok(build_response(session, end_time))
+    Ok(session_to_class_item(session))
 }
 
 /// Elimina una sesión existente por su ID
@@ -284,18 +234,28 @@ fn parse_iso_week(week: &str) -> Result<(chrono::DateTime<Utc>, chrono::DateTime
     ))
 }
 
-fn build_response(session: Session, end_time: NaiveTime) -> CreateClassResponse {
-    let start = session.starts_at.format("%H:%M").to_string();
-    let date = session.starts_at.format("%Y-%m-%d").to_string();
+fn validate_duration(minutes: i64) -> Result<(), AppError> {
+    if minutes <= 0 {
+        return Err(AppError::BadRequest(
+            "endTime debe ser posterior a startTime".into(),
+        ));
+    }
+    if minutes % 30 != 0 {
+        return Err(AppError::BadRequest(
+            "La duración debe ser múltiplo de 30 minutos".into(),
+        ));
+    }
+    Ok(())
+}
 
-    CreateClassResponse {
+fn session_to_class_item(session: Session) -> ClassItem {
+    let end_time = session.starts_at + Duration::minutes(session.duration_min as i64);
+    ClassItem {
         id: session.id,
-        name: session.subject,
-        r#type: session.grp,
-        date,
-        start_time: start,
-        end_time: end_time.format("%H:%M").to_string(),
-        duration_minutes: session.duration_min,
+        subject: session.subject,
+        subject_type: session.grp,
         classroom: session.classroom,
+        start_time: session.starts_at,
+        end_time,
     }
 }

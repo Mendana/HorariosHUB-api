@@ -1,4 +1,3 @@
-// tests/classes_delete.rs
 use crate::common::{login_user, setup};
 use axum::http::StatusCode;
 use serde_json::json;
@@ -17,18 +16,18 @@ async fn login_as(ctx: &crate::common::TestContext, email: &str, role: &str) -> 
     login_user(&ctx.server, email, "Password123").await
 }
 
+/// Crea una sesión de 90 min: 2025-09-15 09:00 → 10:30 UTC con classroom "Aula 1"
 async fn create_session(ctx: &crate::common::TestContext, token: &str) -> String {
     let r = ctx
         .server
         .post("/classes")
         .add_header("Authorization", format!("Bearer {token}"))
         .json(&json!({
-            "name": "ALG",
-            "type": "Teoría",
+            "subject": "ALG",
+            "subjectType": "Teoría",
             "classroom": "Aula 1",
-            "date": { "year": 2025, "month": 9, "day": 15 },
-            "startTime": "09:00",
-            "durationMinutes": 90
+            "startTime": "2025-09-15T09:00:00Z",
+            "endTime":   "2025-09-15T10:30:00Z"
         }))
         .await;
     r.json::<serde_json::Value>()["id"]
@@ -139,13 +138,11 @@ async fn delete_classes_devuelve_404_en_segundo_borrado() {
     let token = login_as(&ctx, "prof6@uniovi.es", "professor").await;
     let id = create_session(&ctx, &token).await;
 
-    // Primera vez — ok
     ctx.server
         .delete(&format!("/classes/{id}"))
         .add_header("Authorization", format!("Bearer {token}"))
         .await;
 
-    // Segunda vez — ya no existe
     let response = ctx
         .server
         .delete(&format!("/classes/{id}"))
@@ -166,8 +163,7 @@ async fn delete_classes_registra_change_aprobado() {
         .add_header("Authorization", format!("Bearer {token}"))
         .await;
 
-    // Tras borrar la sesión, ON DELETE SET NULL pone session_id a NULL en el change.
-    // Verificamos que el registro existe con los prev_* correctos.
+    // ON DELETE SET NULL pone session_id a NULL en el change
     let row = sqlx::query!(
         r#"
         SELECT change_type::text AS change_type, change_status::text AS change_status,
