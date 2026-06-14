@@ -17,4 +17,5 @@ pub fn routes(with_rate_limit: bool) -> Router<AppState> {
         .merge(proposals::routes())
         .merge(subjects::routes(with_rate_limit))
         .merge(scraper::routes())
+        .merge(users::routes())
 }

@@ -105,6 +105,12 @@ pub trait UserRepository: Send + Sync {
     /// # Errores:
     /// - [`AppError::Internal`] para errores en la eliminación en la base de datos
     async fn delete_password_reset_token(&self, token_id: uuid::Uuid) -> Result<(), AppError>;
+
+    /// Devuelve todos los usuarios de la base de datos
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
+    async fn get_all_users(&self) -> Result<Vec<User>, AppError>;
 }
 
 pub struct PgUserRepository {
@@ -321,5 +327,21 @@ impl UserRepository for PgUserRepository {
             .await?;
 
         Ok(())
+    }
+
+    //TODO: Tiene sentido devolver todo a nivel de arquitectura, o es mejor devolver directamente el
+    //UserPublic?
+    async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+        let users = sqlx::query_as!(
+            User,
+            r#"
+            SELECT id, email, password_hash, role AS "role: UserRole", verified
+            FROM users
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(users)
     }
 }
