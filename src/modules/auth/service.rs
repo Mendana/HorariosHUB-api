@@ -357,6 +357,14 @@ mod tests {
         async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
             Ok(vec![])
         }
+
+        async fn change_user_role(
+            &self,
+            _user_id: Uuid,
+            _new_role: UserRole,
+        ) -> Result<(), AppError> {
+            Ok(())
+        }
     }
 
     fn mock_email() -> MockEmailService {
@@ -534,6 +542,14 @@ mod tests {
 
         async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
             Ok(vec![])
+        }
+
+        async fn change_user_role(
+            &self,
+            _user_id: Uuid,
+            _new_role: UserRole,
+        ) -> Result<(), AppError> {
+            Ok(())
         }
     }
 
@@ -758,6 +774,14 @@ mod tests {
             async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
                 Ok(vec![])
             }
+
+            async fn change_user_role(
+                &self,
+                _user_id: Uuid,
+                _new_role: UserRole,
+            ) -> Result<(), AppError> {
+                Ok(())
+            }
         }
 
         let repo = MockUserRepositoryExpired;
@@ -842,6 +866,14 @@ mod tests {
 
             async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
                 Ok(vec![])
+            }
+
+            async fn change_user_role(
+                &self,
+                _user_id: Uuid,
+                _new_role: UserRole,
+            ) -> Result<(), AppError> {
+                Ok(())
             }
         }
 
@@ -950,6 +982,14 @@ mod tests {
 
             async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
                 Ok(vec![])
+            }
+
+            async fn change_user_role(
+                &self,
+                _user_id: Uuid,
+                _new_role: UserRole,
+            ) -> Result<(), AppError> {
+                Ok(())
             }
         }
 
@@ -1130,6 +1170,14 @@ mod tests {
 
             async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
                 Ok(vec![])
+            }
+
+            async fn change_user_role(
+                &self,
+                _user_id: Uuid,
+                _new_role: UserRole,
+            ) -> Result<(), AppError> {
+                Ok(())
             }
         }
 

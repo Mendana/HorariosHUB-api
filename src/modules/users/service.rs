@@ -1,6 +1,9 @@
 use crate::{
     errors::AppError,
-    modules::users::{models::UserPublic, repository::UserRepository},
+    modules::users::{
+        models::{UserPublic, UserRole},
+        repository::UserRepository,
+    },
 };
 
 pub async fn get_all_users(repo: &dyn UserRepository) -> Result<Vec<UserPublic>, AppError> {
@@ -15,6 +18,32 @@ pub async fn get_all_users(repo: &dyn UserRepository) -> Result<Vec<UserPublic>,
         .collect();
 
     Ok(users_public)
+}
+
+pub async fn change_user_role(
+    repo: &dyn UserRepository,
+    identifier: &str,
+    role: &str,
+) -> Result<(), AppError> {
+    let new_role = match role {
+        "student" => UserRole::Student,
+        "professor" => UserRole::Professor,
+        "admin" => UserRole::Admin,
+        _ => return Err(AppError::BadRequest(format!("Invalid role: {role}"))),
+    };
+
+    let identifier = match uuid::Uuid::parse_str(identifier) {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return Err(AppError::BadRequest(format!(
+                "Invalid identifier: {identifier}"
+            )));
+        }
+    };
+
+    repo.change_user_role(identifier, new_role).await?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -87,6 +116,16 @@ mod tests {
             }
             Ok(self.users.clone())
         }
+        async fn change_user_role(
+            &self,
+            _user_id: Uuid,
+            _new_role: UserRole,
+        ) -> Result<(), AppError> {
+            if self.error {
+                return Err(AppError::Internal(anyhow::anyhow!("db error")));
+            }
+            Ok(())
+        }
     }
 
     fn make_user(email: &str, role: UserRole) -> User {
@@ -139,5 +178,109 @@ mod tests {
         };
         let result = get_all_users(&repo).await;
         assert!(matches!(result, Err(AppError::Internal(_))));
+    }
+
+    // ─── change_user_role ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn change_user_role_returns_ok_for_valid_input() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: false,
+        };
+        let id = Uuid::new_v4().to_string();
+        let result = change_user_role(&repo, &id, "professor").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn change_user_role_rejects_invalid_role() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: false,
+        };
+        let id = Uuid::new_v4().to_string();
+        let result = change_user_role(&repo, &id, "superadmin").await;
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn change_user_role_rejects_invalid_uuid() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: false,
+        };
+        let result = change_user_role(&repo, "not-a-uuid", "admin").await;
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn change_user_role_propagates_repo_error() {
+        let repo = MockUserRepository {
+            users: vec![],
+            error: true,
+        };
+        let id = Uuid::new_v4().to_string();
+        let result = change_user_role(&repo, &id, "student").await;
+        assert!(matches!(result, Err(AppError::Internal(_))));
+    }
+
+    struct MockNotFoundRepository;
+
+    #[async_trait]
+    impl UserRepository for MockNotFoundRepository {
+        async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+            Ok(None)
+        }
+        async fn find_by_email(&self, _email: &str) -> Result<Option<User>, AppError> {
+            Ok(None)
+        }
+        async fn create(&self, _: &str, _: &str, _: UserRole) -> Result<User, AppError> {
+            unimplemented!()
+        }
+        async fn create_verification_token(&self, _: Uuid) -> Result<String, AppError> {
+            unimplemented!()
+        }
+        async fn find_verification_token(
+            &self,
+            _: &str,
+        ) -> Result<Option<VerificationToken>, AppError> {
+            unimplemented!()
+        }
+        async fn mark_user_as_verified(&self, _: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn delete_verification_token(&self, _: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn create_password_reset_token(&self, _: Uuid) -> Result<String, AppError> {
+            unimplemented!()
+        }
+        async fn find_password_reset_token(
+            &self,
+            _: &str,
+        ) -> Result<Option<PasswordResetToken>, AppError> {
+            unimplemented!()
+        }
+        async fn update_password(&self, _: Uuid, _: &str) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn delete_password_reset_token(&self, _: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+            unimplemented!()
+        }
+        async fn change_user_role(&self, _: Uuid, _: UserRole) -> Result<(), AppError> {
+            Err(AppError::NotFound)
+        }
+    }
+
+    #[tokio::test]
+    async fn change_user_role_propagates_not_found() {
+        let repo = MockNotFoundRepository;
+        let id = Uuid::new_v4().to_string();
+        let result = change_user_role(&repo, &id, "admin").await;
+        assert!(matches!(result, Err(AppError::NotFound)));
     }
 }

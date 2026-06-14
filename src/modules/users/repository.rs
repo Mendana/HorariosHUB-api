@@ -111,6 +111,14 @@ pub trait UserRepository: Send + Sync {
     /// # Errores:
     /// - [`AppError::Internal`] para errores en la consulta a la base de datos
     async fn get_all_users(&self) -> Result<Vec<User>, AppError>;
+
+    /// Cambia el rol del usuario con el identificador dado al nuevo rol proporcionado
+    /// Devuelve `Ok(())` si la operación fue exitosa
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la actualización en la base de datos
+    /// - [`AppError::NotFound`] si no existe un usuario con el identificador
+    async fn change_user_role(&self, identifier: Uuid, new_role: UserRole) -> Result<(), AppError>;
 }
 
 pub struct PgUserRepository {
@@ -329,8 +337,6 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
-    //TODO: Tiene sentido devolver todo a nivel de arquitectura, o es mejor devolver directamente el
-    //UserPublic?
     async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
         let users = sqlx::query_as!(
             User,
@@ -343,5 +349,25 @@ impl UserRepository for PgUserRepository {
         .await?;
 
         Ok(users)
+    }
+
+    async fn change_user_role(&self, identifier: Uuid, new_role: UserRole) -> Result<(), AppError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE users
+            SET role = $1
+            WHERE id = $2
+            "#,
+            new_role as UserRole,
+            identifier
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
     }
 }
