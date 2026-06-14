@@ -1,14 +1,56 @@
 use axum_test::TestServer;
 use serde_json::json;
 use sqlx::PgPool;
+use std::sync::{Mutex, OnceLock};
 use testcontainers::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
+use tokio::sync::OnceCell;
+use uuid::Uuid;
+
+// Un único contenedor para los tests.
+static POSTGRES_PORT: OnceCell<u16> = OnceCell::const_new();
+static POSTGRES_CONTAINER: OnceLock<Mutex<Option<ContainerAsync<Postgres>>>> = OnceLock::new();
+
+fn container_mutex() -> &'static Mutex<Option<ContainerAsync<Postgres>>> {
+    POSTGRES_CONTAINER.get_or_init(|| Mutex::new(None))
+}
+
+async fn get_postgres_port() -> u16 {
+    *POSTGRES_PORT
+        .get_or_init(|| async {
+            let container = Postgres::default()
+                .start()
+                .await
+                .expect("No se pudo levantar el contenedor de Postgres");
+            let port = container
+                .get_host_port_ipv4(5432)
+                .await
+                .expect("No se pudo obtener el puerto");
+            *container_mutex().lock().unwrap() = Some(container);
+            port
+        })
+        .await
+}
+
+// Al salir el proceso se limpia el contenedor de Postgres
+#[ctor::dtor]
+fn cleanup_postgres() {
+    let container = match container_mutex().lock().ok().and_then(|mut g| g.take()) {
+        Some(c) => c,
+        None => return,
+    };
+    if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        let _ = rt.block_on(container.rm());
+    }
+}
 
 pub struct TestContext {
     pub server: TestServer,
     pub pool: PgPool,
-    _container: ContainerAsync<Postgres>,
 }
 
 pub async fn setup() -> TestContext {
@@ -16,27 +58,26 @@ pub async fn setup() -> TestContext {
 }
 
 pub async fn setup_with_scraper_url(scraper_url: &str) -> TestContext {
-    let container = Postgres::default()
-        .start()
+    let port = get_postgres_port().await;
+
+    // Base de datos única por test
+    let db_name = format!("test_{}", Uuid::new_v4().simple());
+
+    let admin_url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
+    let admin_pool = PgPool::connect(&admin_url)
         .await
-        .expect("No se pudo levantar el contenedor de Postgres");
+        .expect("No se pudo conectar al contenedor de Postgres");
+    sqlx::query(&format!("CREATE DATABASE {db_name}"))
+        .execute(&admin_pool)
+        .await
+        .expect("No se pudo crear la base de datos de test");
+    admin_pool.close().await;
 
-    let db_url = format!(
-        "postgres://postgres:postgres@127.0.0.1:{}/postgres",
-        container
-            .get_host_port_ipv4(5432)
-            .await
-            .expect("No se pudo obtener el puerto")
-    );
-
+    let db_url = format!("postgres://postgres:postgres@127.0.0.1:{port}/{db_name}");
     let (app, pool) = horarioshub_api::create_test_app_with_scraper(&db_url, scraper_url).await;
     let server = TestServer::new(app);
 
-    TestContext {
-        server,
-        pool,
-        _container: container,
-    }
+    TestContext { server, pool }
 }
 
 #[allow(dead_code)]

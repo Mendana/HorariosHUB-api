@@ -130,6 +130,67 @@ async fn get_schedule_devuelve_200_con_array_con_datos_si_todo_bien() {
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0]["subject"], "MAT101");
     assert_eq!(sessions[0]["group"], "A");
+    assert!(sessions[0]["classroom"].is_null());
+}
+
+#[tokio::test]
+async fn get_schedule_devuelve_classroom_cuando_esta_definida() {
+    let ctx = setup().await;
+
+    let email = "classroom@uniovi.es";
+    let password = "Password123";
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": email, "password": password }))
+        .await;
+    verify_user(&ctx.pool, email).await;
+
+    sqlx::query!(
+        "INSERT INTO subject_groups (subject, grp) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        "QUI202",
+        "B"
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let starts_at: DateTime<Utc> = DateTime::from_str("2026-05-19T09:00:00Z").unwrap();
+    sqlx::query!(
+        "INSERT INTO sessions (subject, grp, starts_at, duration_min, classroom) VALUES ($1, $2, $3, $4, $5)",
+        "QUI202",
+        "B",
+        starts_at,
+        60i32,
+        "Aula 3.1"
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let row = sqlx::query!("SELECT id FROM users WHERE email = $1", email)
+        .fetch_one(&ctx.pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO schedule (user_id, subject, grp) VALUES ($1, $2, $3)",
+        row.id,
+        "QUI202",
+        "B"
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .get(&format!("/schedule/{email}?start=2026-05-19T00:00:00Z"))
+        .await;
+
+    response.assert_status_ok();
+    let body: serde_json::Value = response.json();
+    let sessions = body["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0]["classroom"], "Aula 3.1");
 }
 
 // ── Tests mensuales (?month) ───────────────────────────────────────────────────
@@ -256,4 +317,5 @@ async fn get_schedule_month_devuelve_200_con_datos_del_mes() {
     let sessions = body["sessions"].as_array().unwrap();
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0]["subject"], "FIS301");
+    assert!(sessions[0]["classroom"].is_null());
 }
