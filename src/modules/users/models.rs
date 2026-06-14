@@ -8,6 +8,11 @@ pub struct UserPublic {
     pub role: UserRole,
 }
 
+#[derive(Debug, Serialize)]
+pub struct UsersListResponse {
+    pub users: Vec<UserPublic>,
+}
+
 // --- Modelos de base de datos ---
 
 /// Modelo de usuario para la base de datos

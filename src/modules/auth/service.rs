@@ -353,6 +353,10 @@ mod tests {
         async fn create_password_reset_token(&self, _user_id: Uuid) -> Result<String, AppError> {
             Ok("reset_token".to_string())
         }
+
+        async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+            Ok(vec![])
+        }
     }
 
     fn mock_email() -> MockEmailService {
@@ -526,6 +530,10 @@ mod tests {
 
         async fn create_password_reset_token(&self, _user_id: Uuid) -> Result<String, AppError> {
             Ok("reset_token".to_string())
+        }
+
+        async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+            Ok(vec![])
         }
     }
 
@@ -746,6 +754,10 @@ mod tests {
             ) -> Result<String, AppError> {
                 Ok("reset_token".to_string())
             }
+
+            async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+                Ok(vec![])
+            }
         }
 
         let repo = MockUserRepositoryExpired;
@@ -826,6 +838,10 @@ mod tests {
                 _user_id: Uuid,
             ) -> Result<String, AppError> {
                 Ok("reset_token".to_string())
+            }
+
+            async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+                Ok(vec![])
             }
         }
 
@@ -930,6 +946,10 @@ mod tests {
                 _user_id: Uuid,
             ) -> Result<String, AppError> {
                 Ok("reset_token".to_string())
+            }
+
+            async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+                Ok(vec![])
             }
         }
 
@@ -1106,6 +1126,10 @@ mod tests {
                 _user_id: Uuid,
             ) -> Result<String, AppError> {
                 Ok("reset_token".to_string())
+            }
+
+            async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+                Ok(vec![])
             }
         }
 
