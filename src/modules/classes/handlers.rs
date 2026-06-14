@@ -13,8 +13,8 @@ use crate::{
         auth::middleware::{AuthenticatedUser, ProfessorOrAbove},
         classes::{
             models::{
-                CreateClassRequest, CreateClassResponse, DeleteClassResponse,
-                ListClassesQueryParams, ListClassesResponse, UpdateClassRequest,
+                ClassItem, CreateClassRequest, DeleteClassResponse, ListClassesQueryParams,
+                ListClassesResponse, UpdateClassRequest,
             },
             service,
         },
@@ -22,12 +22,12 @@ use crate::{
 };
 
 /// POST /api/classes
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, subject = %payload.name))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, subject = %payload.subject))]
 pub async fn create_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
     Json(payload): Json<CreateClassRequest>,
-) -> ApiResult<(StatusCode, Json<CreateClassResponse>)> {
+) -> ApiResult<(StatusCode, Json<ClassItem>)> {
     payload
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
@@ -50,7 +50,7 @@ pub async fn update_class(
     ProfessorOrAbove(professor): ProfessorOrAbove,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateClassRequest>,
-) -> ApiResult<Json<CreateClassResponse>> {
+) -> ApiResult<Json<ClassItem>> {
     payload
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;

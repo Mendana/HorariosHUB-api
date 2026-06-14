@@ -18,18 +18,18 @@ async fn login_as(ctx: &crate::common::TestContext, email: &str, role: &str) -> 
     login_user(&ctx.server, email, "Password123").await
 }
 
+/// Crea una sesión de 90 min: 2025-09-15 09:00 → 10:30 UTC
 async fn create_session(ctx: &crate::common::TestContext, token: &str) -> String {
     let r = ctx
         .server
         .post("/classes")
         .add_header("Authorization", format!("Bearer {token}"))
         .json(&json!({
-            "name": "ALG",
-            "type": "Teoría",
+            "subject": "ALG",
+            "subjectType": "Teoría",
             "classroom": "Aula 1",
-            "date": { "year": 2025, "month": 9, "day": 15 },
-            "startTime": "09:00",
-            "durationMinutes": 90
+            "startTime": "2025-09-15T09:00:00Z",
+            "endTime":   "2025-09-15T10:30:00Z"
         }))
         .await;
     r.json::<serde_json::Value>()["id"]
@@ -54,8 +54,11 @@ async fn patch_classes_actualiza_classroom() {
     response.assert_status_ok();
     let body: serde_json::Value = response.json();
     assert_eq!(body["classroom"], "Aula 2");
-    assert_eq!(body["startTime"], "09:00");
-    assert_eq!(body["endTime"], "10:30");
+
+    // Hora no cambia
+    let start: chrono::DateTime<chrono::Utc> = body["startTime"].as_str().unwrap().parse().unwrap();
+    let end: chrono::DateTime<chrono::Utc> = body["endTime"].as_str().unwrap().parse().unwrap();
+    assert_eq!((end - start).num_minutes(), 90);
 }
 
 #[tokio::test]
@@ -64,17 +67,20 @@ async fn patch_classes_actualiza_hora_y_recalcula_end_time() {
     let token = login_as(&ctx, "prof2@uniovi.es", "professor").await;
     let id = create_session(&ctx, &token).await;
 
+    // Solo cambia startTime → endTime = new_start + duración original (90 min)
     let response = ctx
         .server
         .patch(&format!("/classes/{id}"))
         .add_header("Authorization", format!("Bearer {token}"))
-        .json(&json!({ "startTime": "11:00" }))
+        .json(&json!({ "startTime": "2025-09-15T11:00:00Z" }))
         .await;
 
     response.assert_status_ok();
     let body: serde_json::Value = response.json();
-    assert_eq!(body["startTime"], "11:00");
-    assert_eq!(body["endTime"], "12:30"); // 11:00 + 90 min originales
+    let start: chrono::DateTime<chrono::Utc> = body["startTime"].as_str().unwrap().parse().unwrap();
+    let end: chrono::DateTime<chrono::Utc> = body["endTime"].as_str().unwrap().parse().unwrap();
+    assert_eq!(start.format("%H:%M").to_string(), "11:00");
+    assert_eq!((end - start).num_minutes(), 90); // duración original conservada
 }
 
 #[tokio::test]
@@ -83,17 +89,20 @@ async fn patch_classes_actualiza_duracion_y_recalcula_end_time() {
     let token = login_as(&ctx, "prof3@uniovi.es", "professor").await;
     let id = create_session(&ctx, &token).await;
 
+    // Solo cambia endTime → nueva duración = end - existing_start
     let response = ctx
         .server
         .patch(&format!("/classes/{id}"))
         .add_header("Authorization", format!("Bearer {token}"))
-        .json(&json!({ "durationMinutes": 60 }))
+        .json(&json!({ "endTime": "2025-09-15T10:00:00Z" }))
         .await;
 
     response.assert_status_ok();
     let body: serde_json::Value = response.json();
-    assert_eq!(body["startTime"], "09:00");
-    assert_eq!(body["endTime"], "10:00"); // 09:00 + 60 min nuevos
+    let start: chrono::DateTime<chrono::Utc> = body["startTime"].as_str().unwrap().parse().unwrap();
+    let end: chrono::DateTime<chrono::Utc> = body["endTime"].as_str().unwrap().parse().unwrap();
+    assert_eq!(start.format("%H:%M").to_string(), "09:00");
+    assert_eq!((end - start).num_minutes(), 60); // 90 → 60
 }
 
 #[tokio::test]
@@ -153,19 +162,20 @@ async fn patch_classes_devuelve_403_como_student() {
 }
 
 #[tokio::test]
-async fn patch_classes_devuelve_422_si_duracion_no_multiplo_30() {
+async fn patch_classes_devuelve_400_si_duracion_no_multiplo_30() {
     let ctx = setup().await;
     let token = login_as(&ctx, "prof7@uniovi.es", "professor").await;
     let id = create_session(&ctx, &token).await;
 
+    // endTime genera 45 min (no múltiplo de 30)
     let response = ctx
         .server
         .patch(&format!("/classes/{id}"))
         .add_header("Authorization", format!("Bearer {token}"))
-        .json(&json!({ "durationMinutes": 45 }))
+        .json(&json!({ "endTime": "2025-09-15T09:45:00Z" }))
         .await;
 
-    response.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    response.assert_status(StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -175,10 +185,14 @@ async fn patch_classes_registra_change_aprobado() {
     let id = create_session(&ctx, &token).await;
     let session_uuid = uuid::Uuid::parse_str(&id).unwrap();
 
+    // Cambia duración (90 → 60) y classroom
     ctx.server
         .patch(&format!("/classes/{id}"))
         .add_header("Authorization", format!("Bearer {token}"))
-        .json(&json!({ "durationMinutes": 60, "classroom": "Aula 9" }))
+        .json(&json!({
+            "endTime":   "2025-09-15T10:00:00Z",
+            "classroom": "Aula 9"
+        }))
         .await;
 
     let row = sqlx::query!(
@@ -198,8 +212,8 @@ async fn patch_classes_registra_change_aprobado() {
     assert_eq!(row.change_type.as_deref(), Some("modify"));
     assert_eq!(row.change_status.as_deref(), Some("approved"));
     assert_eq!(row.session_id, Some(session_uuid));
-    assert_eq!(row.prev_duration, Some(90)); // duración original de create_session
-    assert_eq!(row.prev_classroom.as_deref(), Some("Aula 1")); // classroom original
-    assert_eq!(row.new_duration, Some(60)); // solo cambia si difiere del prev
+    assert_eq!(row.prev_duration, Some(90));
+    assert_eq!(row.prev_classroom.as_deref(), Some("Aula 1"));
+    assert_eq!(row.new_duration, Some(60));
     assert_eq!(row.new_classroom.as_deref(), Some("Aula 9"));
 }
