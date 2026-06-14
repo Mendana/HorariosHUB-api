@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::utils::validators::validate_multiple_of_30;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -101,4 +103,102 @@ pub struct DateInput {
     pub year: i32,
     pub month: u32,
     pub day: u32,
+}
+
+/// Payload del endpoint `GET /api/classes`
+#[derive(Debug, Deserialize, Validate)]
+pub struct ListClassesQueryParams {
+    pub search: Option<String>,
+    pub week: Option<String>,
+    pub sort: Option<ListClassesSortOption>,
+    pub dir: Option<ListClassesSortDirection>,
+    #[validate(range(min = 1, message = "El parámetro 'page' debe ser mayor o igual a 1"))]
+    pub page: Option<u32>,
+    #[validate(range(
+        min = 1,
+        max = 100,
+        message = "El parámetro 'limit' debe estar entre 1 y 100"
+    ))]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListClassesSortOption {
+    Name,
+    #[serde(rename = "type")]
+    Type,
+    Date,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListClassesSortDirection {
+    Asc,
+    Desc,
+}
+
+impl FromStr for ListClassesSortOption {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "name" => Ok(ListClassesSortOption::Name),
+            "type" => Ok(ListClassesSortOption::Type),
+            "date" => Ok(ListClassesSortOption::Date),
+            _ => Err(()),
+        }
+    }
+}
+
+impl FromStr for ListClassesSortDirection {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "asc" => Ok(ListClassesSortDirection::Asc),
+            "desc" => Ok(ListClassesSortDirection::Desc),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Parámetros internos para `ClassRepository::list_sessions`
+pub struct ListSessionsParams<'a> {
+    pub search: Option<&'a str>,
+    pub week_start: Option<DateTime<Utc>>,
+    pub week_end: Option<DateTime<Utc>>,
+    pub order_col: &'a str,
+    pub order_dir: &'a str,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+/// Response del endpoint `GET /api/classes`
+#[derive(Debug, Serialize)]
+pub struct ListClassesResponse {
+    pub classes: Vec<ClassItem>,
+    pub total: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassItem {
+    pub id: Uuid,
+    pub subject: String,
+    pub subject_type: String,
+    pub classroom: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct ClassItemRow {
+    pub id: Uuid,
+    pub subject: String,
+    pub grp: String,
+    pub classroom: Option<String>,
+    pub starts_at: DateTime<Utc>,
+    pub duration_min: i32,
+    pub total: i64,
 }
