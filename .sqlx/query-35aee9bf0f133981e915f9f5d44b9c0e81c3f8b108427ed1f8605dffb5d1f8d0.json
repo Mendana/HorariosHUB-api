@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT subject, grp FROM subject_groups WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "grp",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "35aee9bf0f133981e915f9f5d44b9c0e81c3f8b108427ed1f8605dffb5d1f8d0"
+}

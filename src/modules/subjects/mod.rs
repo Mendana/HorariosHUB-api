@@ -16,7 +16,9 @@ pub fn routes(with_rate_limit: bool) -> Router<AppState> {
         .route(
             "/auto-select/status",
             get(handlers::get_auto_selection_status),
-        );
+        )
+        .route("/list", get(handlers::get_all_subjects_catalog))
+        .route("/{code}/groups", get(handlers::get_all_groups_per_subject));
 
     let auto_select = Router::new().route("/auto-select", post(handlers::auto_select_subjects));
 

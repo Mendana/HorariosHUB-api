@@ -10,11 +10,13 @@ use validator::Validate;
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateClassRequest {
+    pub group_id: Option<Uuid>,
+
     #[validate(length(min = 1, message = "El nombre de la clase es obligatorio"))]
-    pub subject: String,
+    pub subject: Option<String>,
 
     #[validate(length(min = 1, message = "El tipo de clase es obligatorio"))]
-    pub subject_type: String,
+    pub subject_type: Option<String>,
 
     pub classroom: Option<String>,
 
@@ -41,6 +43,8 @@ pub struct Session {
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateClassRequest {
+    pub group_id: Option<Uuid>,
+
     #[validate(length(min = 1, message = "El nombre de la clase no puede estar vacío"))]
     pub subject: Option<String>,
 

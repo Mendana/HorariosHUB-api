@@ -29,14 +29,22 @@ pub async fn create_class(
     validate_duration(duration_min)?;
     let duration_min = duration_min as i32;
 
+    let (subject, subject_type) = resolve_subject_group(
+        payload.group_id,
+        payload.subject,
+        payload.subject_type,
+        class_repo,
+    )
+    .await?;
+
     class_repo
-        .upsert_subject_group(&payload.subject, &payload.subject_type)
+        .upsert_subject_group(&subject, &subject_type)
         .await?;
 
     let session = class_repo
         .create_session(
-            &payload.subject,
-            &payload.subject_type,
+            &subject,
+            &subject_type,
             payload.start_time,
             duration_min,
             payload.classroom.as_deref(),
@@ -73,6 +81,14 @@ pub async fn update_class(
 ) -> Result<ClassItem, AppError> {
     let existing = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
 
+    // Si viene group_id, resuelve subject/subject_type a partir de él
+    let (resolved_subject, resolved_subject_type) = if payload.group_id.is_some() {
+        let (s, st) = resolve_subject_group(payload.group_id, None, None, class_repo).await?;
+        (Some(s), Some(st))
+    } else {
+        (payload.subject, payload.subject_type)
+    };
+
     let new_starts_at = payload.start_time;
     let new_duration_min = match (payload.start_time, payload.end_time) {
         (Some(start), Some(end)) => {
@@ -92,8 +108,8 @@ pub async fn update_class(
     let session = class_repo
         .update_session(
             id,
-            payload.subject.as_deref(),
-            payload.subject_type.as_deref(),
+            resolved_subject.as_deref(),
+            resolved_subject_type.as_deref(),
             new_starts_at,
             new_duration_min,
             payload.classroom.as_deref(),
@@ -215,6 +231,26 @@ pub async fn get_classes(
         .collect();
 
     Ok(ListClassesResponse { classes, total })
+}
+
+async fn resolve_subject_group(
+    group_id: Option<Uuid>,
+    subject: Option<String>,
+    subject_type: Option<String>,
+    class_repo: &dyn ClassRepository,
+) -> Result<(String, String), AppError> {
+    if let Some(gid) = group_id {
+        return class_repo
+            .find_subject_group_by_id(gid)
+            .await?
+            .ok_or(AppError::NotFound);
+    }
+    match (subject, subject_type) {
+        (Some(s), Some(st)) => Ok((s, st)),
+        _ => Err(AppError::BadRequest(
+            "Se requiere groupId o los campos subject y subjectType".into(),
+        )),
+    }
 }
 
 fn parse_iso_week(week: &str) -> Result<(chrono::DateTime<Utc>, chrono::DateTime<Utc>), AppError> {

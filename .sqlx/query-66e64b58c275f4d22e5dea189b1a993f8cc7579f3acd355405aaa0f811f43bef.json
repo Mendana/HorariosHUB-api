@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT subject\n            FROM subject_groups\n            ORDER BY subject\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "66e64b58c275f4d22e5dea189b1a993f8cc7579f3acd355405aaa0f811f43bef"
+}
