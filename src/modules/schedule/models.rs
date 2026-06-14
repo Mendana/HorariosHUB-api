@@ -27,8 +27,10 @@ pub struct GetScheduleResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct GetScheduleQuery {
-    pub start: DateTime<Utc>,
+    pub start: Option<DateTime<Utc>>,
+    pub month: Option<String>,
 }
+
 #[derive(Debug, Deserialize)]
 pub struct CopyScheduleQuery {
     pub user: String,
