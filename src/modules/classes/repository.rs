@@ -101,6 +101,12 @@ pub trait ClassRepository: Send + Sync {
         &self,
         params: ListSessionsParams<'_>,
     ) -> Result<(Vec<ClassItemRow>, i64), AppError>;
+
+    /// Busca el subject y grp de un subject_group por su UUID.
+    async fn find_subject_group_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<(String, String)>, AppError>;
 }
 
 pub struct PgClassRepository {
@@ -282,6 +288,17 @@ impl ClassRepository for PgClassRepository {
         .await?;
 
         Ok(id)
+    }
+
+    async fn find_subject_group_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<(String, String)>, AppError> {
+        let row = sqlx::query!("SELECT subject, grp FROM subject_groups WHERE id = $1", id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|r| (r.subject, r.grp)))
     }
 
     async fn list_sessions(

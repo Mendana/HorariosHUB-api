@@ -1,4 +1,7 @@
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use reqwest::StatusCode;
 
 use crate::{
@@ -8,8 +11,9 @@ use crate::{
         auth::middleware::AuthenticatedUser,
         subjects::{
             models::{
-                AutoSelectResponse, AutoSelectStatusResponse, CatalogResponse,
-                UserSelectionRequest, UserSelectionResponse,
+                AllGroupsPerSubjectResponse, AllSubjectsResponse, AutoSelectResponse,
+                AutoSelectStatusResponse, CatalogResponse, UserSelectionRequest,
+                UserSelectionResponse,
             },
             service,
         },
@@ -70,4 +74,30 @@ pub async fn get_auto_selection_status(
         service::auto_select_subjects_status(state.subjects_repo.as_ref(), user.user.id).await?;
 
     Ok((StatusCode::OK, Json(response)))
+}
+
+#[tracing::instrument(skip(state), fields(user_id = "N/A"))]
+pub async fn get_all_subjects_catalog(
+    State(state): State<AppState>,
+) -> ApiResult<(StatusCode, Json<AllSubjectsResponse>)> {
+    let response = service::get_all_subjects_catalog(state.subjects_repo.as_ref()).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(AllSubjectsResponse { subjects: response }),
+    ))
+}
+
+#[tracing::instrument(skip(state), fields(subject = %subject))]
+pub async fn get_all_groups_per_subject(
+    State(state): State<AppState>,
+    Path(subject): Path<String>,
+) -> ApiResult<(StatusCode, Json<AllGroupsPerSubjectResponse>)> {
+    let response =
+        service::get_all_groups_per_subject(state.subjects_repo.as_ref(), &subject).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(AllGroupsPerSubjectResponse { groups: response }),
+    ))
 }

@@ -76,3 +76,19 @@ pub struct JobStatusRow {
     pub groups_selected: Option<i32>,
     pub error: Option<String>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct AllSubjectsResponse {
+    pub subjects: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AllGroupsPerSubjectResponse {
+    pub groups: Vec<GroupEntryWithoutSelection>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GroupEntryWithoutSelection {
+    pub id: Uuid,
+    pub name: String,
+}

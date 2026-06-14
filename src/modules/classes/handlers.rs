@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// POST /api/classes
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, subject = %payload.subject))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
 pub async fn create_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,

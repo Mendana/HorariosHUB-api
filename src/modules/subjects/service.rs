@@ -8,7 +8,8 @@ use crate::{
     modules::subjects::{
         models::{
             AutoSelectResponse, AutoSelectStatus, AutoSelectStatusResponse, CatalogResponse,
-            GroupEntry, JobStatusRow, SubjectEntry, UserSelectionResponse,
+            GroupEntry, GroupEntryWithoutSelection, JobStatusRow, SubjectEntry,
+            UserSelectionResponse,
         },
         repository::SubjectRepository,
     },
@@ -164,6 +165,25 @@ pub async fn auto_select_subjects_status(
         groups_selected,
         error,
     })
+}
+
+pub async fn get_all_subjects_catalog(
+    repo: &dyn SubjectRepository,
+) -> Result<Vec<String>, AppError> {
+    let rows = repo.get_all_subjects_catalog().await?;
+
+    Ok(rows)
+}
+
+pub async fn get_all_groups_per_subject(
+    repo: &dyn SubjectRepository,
+    subject: &str,
+) -> Result<Vec<GroupEntryWithoutSelection>, AppError> {
+    let groups = repo.get_all_groups_per_subject(subject).await?;
+    if groups.is_empty() {
+        return Err(AppError::NotFound);
+    }
+    Ok(groups)
 }
 
 fn is_uo_username(username: &str) -> bool {
