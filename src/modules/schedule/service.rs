@@ -97,6 +97,7 @@ fn rows_to_sessions(rows: Vec<ScheduleSubjectRow>) -> Vec<ScheduleSubject> {
             group: row.group,
             start_time: row.starts_at,
             end_time: row.starts_at + Duration::minutes(row.duration_min.into()),
+            classroom: row.classroom,
         })
         .collect()
 }

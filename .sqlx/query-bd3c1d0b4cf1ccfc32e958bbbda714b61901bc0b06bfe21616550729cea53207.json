@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            se.id,\n            s.subject,\n            s.grp AS \"group\",\n            se.starts_at,\n            se.duration_min\n        FROM schedule s\n        JOIN sessions se\n        ON se.subject = s.subject\n        AND se.grp = s.grp\n        WHERE s.user_id = $1\n        AND se.starts_at >= $2\n        AND se.starts_at < $3\n        ",
+  "query": "\n        SELECT\n            se.id,\n            s.subject,\n            s.grp AS \"group\",\n            se.starts_at,\n            se.duration_min,\n            se.classroom\n        FROM schedule s\n        JOIN sessions se\n        ON se.subject = s.subject\n        AND se.grp = s.grp\n        WHERE s.user_id = $1\n        AND se.starts_at >= $2\n        AND se.starts_at < $3\n        ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "duration_min",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "classroom",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -41,8 +46,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "6e8097b235eac143757d8e1678323d8e959d96ca3ca544961fd751634c6024da"
+  "hash": "bd3c1d0b4cf1ccfc32e958bbbda714b61901bc0b06bfe21616550729cea53207"
 }

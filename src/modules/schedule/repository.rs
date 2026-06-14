@@ -54,7 +54,8 @@ impl ScheduleRepository for PgScheduleRepository {
             s.subject,
             s.grp AS "group",
             se.starts_at,
-            se.duration_min
+            se.duration_min,
+            se.classroom
         FROM schedule s
         JOIN sessions se
         ON se.subject = s.subject

@@ -9,6 +9,7 @@ pub struct ScheduleSubject {
     pub group: String,
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
+    pub classroom: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -18,6 +19,7 @@ pub struct ScheduleSubjectRow {
     pub group: String,
     pub starts_at: DateTime<Utc>,
     pub duration_min: i32,
+    pub classroom: Option<String>,
 }
 
 #[derive(Debug, Serialize, Default)]
