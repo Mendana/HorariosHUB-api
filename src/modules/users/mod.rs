@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, patch},
+    routing::{delete, get, patch},
 };
 
 use crate::AppState;
@@ -16,7 +16,8 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/{identifier}/change/{role}",
             patch(handlers::change_user_role),
-        );
+        )
+        .route("/{identifier}", delete(handlers::delete_user));
 
     Router::new().nest("/users", routes)
 }

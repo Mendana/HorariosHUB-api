@@ -365,6 +365,10 @@ mod tests {
         ) -> Result<(), AppError> {
             Ok(())
         }
+
+        async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
     }
 
     fn mock_email() -> MockEmailService {
@@ -549,6 +553,10 @@ mod tests {
             _user_id: Uuid,
             _new_role: UserRole,
         ) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
             Ok(())
         }
     }
@@ -782,6 +790,10 @@ mod tests {
             ) -> Result<(), AppError> {
                 Ok(())
             }
+
+            async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
+                Ok(())
+            }
         }
 
         let repo = MockUserRepositoryExpired;
@@ -873,6 +885,10 @@ mod tests {
                 _user_id: Uuid,
                 _new_role: UserRole,
             ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
             }
         }
@@ -989,6 +1005,10 @@ mod tests {
                 _user_id: Uuid,
                 _new_role: UserRole,
             ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
             }
         }
@@ -1177,6 +1197,10 @@ mod tests {
                 _user_id: Uuid,
                 _new_role: UserRole,
             ) -> Result<(), AppError> {
+                Ok(())
+            }
+
+            async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
             }
         }
