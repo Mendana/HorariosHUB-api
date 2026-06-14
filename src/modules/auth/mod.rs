@@ -1,7 +1,6 @@
 pub mod handlers;
 pub mod middleware;
 pub mod models;
-pub mod repository;
 pub mod service;
 
 use crate::{AppState, services::rate_limit};

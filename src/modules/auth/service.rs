@@ -1,14 +1,15 @@
 use chrono::Utc;
 
-use super::models::{RegisterRequest, RegisterResponse, UserRole};
+use super::models::{RegisterRequest, RegisterResponse};
 use crate::config::Config;
 use crate::errors::AppError;
 use crate::jwt;
 use crate::modules::auth::models::{
     LoginRequest, LoginResponse, RecoverPasswordRequest, RecoverPasswordResponse,
-    ResetPasswordRequest, ResetPasswordResponse, UserPublic, VerifyEmailResponse,
+    ResetPasswordRequest, ResetPasswordResponse, VerifyEmailResponse,
 };
-use crate::modules::auth::repository::UserRepository;
+use crate::modules::users::models::{UserPublic, UserRole};
+use crate::modules::users::repository::UserRepository;
 use crate::services::email::service::EmailService;
 
 /// Registra un nuevo usuario en el sistema
@@ -254,10 +255,9 @@ pub async fn recover_password(
 mod tests {
     use super::*;
     use crate::errors::AppError;
-    use crate::modules::auth::models::{
-        PasswordResetToken, RegisterRequest, User, UserRole, VerificationToken,
-    };
-    use crate::modules::auth::repository::UserRepository;
+    use crate::modules::auth::models::RegisterRequest;
+    use crate::modules::users::models::{PasswordResetToken, User, UserRole, VerificationToken};
+    use crate::modules::users::repository::UserRepository;
     use crate::services::email::service::MockEmailService;
     use async_trait::async_trait;
     use uuid::Uuid;

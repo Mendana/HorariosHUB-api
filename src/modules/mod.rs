@@ -4,6 +4,7 @@ pub mod proposals;
 pub mod schedule;
 pub mod scraper;
 pub mod subjects;
+pub mod users;
 
 use crate::AppState;
 use axum::Router;

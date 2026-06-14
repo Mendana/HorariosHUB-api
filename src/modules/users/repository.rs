@@ -1,8 +1,5 @@
-use super::models::{User, UserRole};
-use crate::{
-    errors::AppError,
-    modules::auth::models::{PasswordResetToken, VerificationToken},
-};
+use super::models::{PasswordResetToken, User, UserRole, VerificationToken};
+use crate::errors::AppError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
