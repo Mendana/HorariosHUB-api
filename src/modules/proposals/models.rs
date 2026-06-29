@@ -188,7 +188,7 @@ pub struct ListMineProposalsQuery {
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, sqlx::Type, Deserialize, Serialize)]
+#[derive(Debug, Clone, sqlx::Type, Deserialize, Serialize)]
 #[sqlx(type_name = "change_type", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ChangeType {

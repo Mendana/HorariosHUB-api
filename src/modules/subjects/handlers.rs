@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// GET /subjects/catalog
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn get_catalog_by_user(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -32,7 +32,7 @@ pub async fn get_catalog_by_user(
 }
 
 /// POST /subjects/selection
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn set_user_selection_destructive(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -48,7 +48,7 @@ pub async fn set_user_selection_destructive(
     Ok(Json(response))
 }
 
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn auto_select_subjects(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -65,7 +65,7 @@ pub async fn auto_select_subjects(
     Ok((StatusCode::ACCEPTED, Json(response)))
 }
 
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn get_auto_selection_status(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -76,7 +76,7 @@ pub async fn get_auto_selection_status(
     Ok((StatusCode::OK, Json(response)))
 }
 
-#[tracing::instrument(skip(state), fields(user_id = "N/A"))]
+#[tracing::instrument(skip(state))]
 pub async fn get_all_subjects_catalog(
     State(state): State<AppState>,
 ) -> ApiResult<(StatusCode, Json<AllSubjectsResponse>)> {

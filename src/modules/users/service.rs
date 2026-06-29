@@ -34,32 +34,48 @@ pub async fn change_user_role(
         _ => return Err(AppError::BadRequest(format!("Invalid role: {role}"))),
     };
 
-    let identifier = match Uuid::parse_str(identifier) {
+    let user_id = match Uuid::parse_str(identifier) {
         Ok(uuid) => uuid,
         Err(_) => {
+            tracing::warn!(identifier = %identifier, "UUID de usuario inválido al cambiar rol");
             return Err(AppError::BadRequest(format!(
                 "Invalid identifier: {identifier}"
             )));
         }
     };
 
-    repo.change_user_role(identifier, new_role).await?;
+    repo.change_user_role(user_id, new_role.clone())
+        .await
+        .map_err(|e| {
+            if matches!(e, AppError::NotFound) {
+                tracing::warn!(user_id = %user_id, "Usuario no encontrado al cambiar rol");
+            }
+            e
+        })?;
 
+    tracing::info!(user_id = %user_id, new_role = ?new_role, "Rol de usuario cambiado");
     Ok(())
 }
 
 pub async fn delete_user(repo: &dyn UserRepository, identifier: &str) -> Result<(), AppError> {
-    let identifier = match Uuid::parse_str(identifier) {
+    let user_id = match Uuid::parse_str(identifier) {
         Ok(uuid) => uuid,
         Err(_) => {
+            tracing::warn!(identifier = %identifier, "UUID de usuario inválido al eliminar");
             return Err(AppError::BadRequest(format!(
                 "Invalid identifier: {identifier}"
             )));
         }
     };
 
-    repo.delete_user(identifier).await?;
+    repo.delete_user(user_id).await.map_err(|e| {
+        if matches!(e, AppError::NotFound) {
+            tracing::warn!(user_id = %user_id, "Usuario no encontrado al eliminar");
+        }
+        e
+    })?;
 
+    tracing::info!(user_id = %user_id, "Usuario eliminado");
     Ok(())
 }
 

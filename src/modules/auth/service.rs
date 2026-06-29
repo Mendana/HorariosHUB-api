@@ -28,6 +28,10 @@ pub async fn register(
     payload: RegisterRequest,
 ) -> Result<RegisterResponse, AppError> {
     if !password_is_strong(&payload.password) {
+        tracing::warn!(
+            email = %payload.email,
+            "Intento de registro con contraseña débil"
+        );
         return Err(AppError::Validation(
             "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números".into(),
         ));
@@ -36,12 +40,20 @@ pub async fn register(
     let email = payload.email.trim().to_lowercase();
 
     if !email.ends_with("@uniovi.es") {
+        tracing::warn!(
+            email = %email,
+            "Intento de registro con email fuera del dominio permitido"
+        );
         return Err(AppError::Validation(
             "El email debe pertenecer al dominio @uniovi.es".into(),
         ));
     }
 
     if repo.find_by_email(&email).await?.is_some() {
+        tracing::warn!(
+            email = %email,
+            "Intento de registro con email ya registrado"
+        );
         return Err(AppError::Conflict("El email ya está registrado".into()));
     }
 
@@ -49,8 +61,22 @@ pub async fn register(
     let password_hash =
         tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
             .await
-            .map_err(|e| AppError::Internal(e.into()))?
-            .map_err(|e| AppError::Internal(e.into()))?;
+            .map_err(|e| {
+                tracing::error!(
+                    email = %email,
+                    error = ?e,
+                    "Error al hashear la contraseña"
+                );
+                AppError::Internal(e.into())
+            })?
+            .map_err(|e| {
+                tracing::error!(
+                    email = %email,
+                    error = ?e,
+                    "Error al hashear la contraseña"
+                );
+                AppError::Internal(e.into())
+            })?;
 
     let user = repo
         .create(&email, &password_hash, UserRole::Student)
@@ -66,6 +92,11 @@ pub async fn register(
         );
     }
 
+    tracing::info!(
+        email = %email,
+        user_id = %user.id,
+        "Usuario registrado correctamente"
+    );
     Ok(RegisterResponse {
         email: user.email,
         role: user.role,
@@ -98,19 +129,40 @@ pub async fn login(
 ) -> Result<(LoginResponse, String), AppError> {
     let email = payload.email.trim().to_lowercase();
 
-    let user = repo
-        .find_by_email(&email)
-        .await?
-        .ok_or(AppError::Unauthorized)?;
+    let user = repo.find_by_email(&email).await?.ok_or({
+        tracing::warn!(
+            email = %email,
+            "Intento de login con email no registrado"
+        );
+        AppError::Unauthorized
+    })?;
 
     let password = payload.password.clone();
     let hash = user.password_hash.clone();
     let valid = tokio::task::spawn_blocking(move || bcrypt::verify(password, &hash))
         .await
-        .map_err(|e| AppError::Internal(e.into()))?
-        .map_err(|e| AppError::Internal(e.into()))?;
+        .map_err(|e| {
+            tracing::error!(
+                email = %email,
+                error = ?e,
+                "Error al verificar la contraseña"
+            );
+            AppError::Internal(e.into())
+        })?
+        .map_err(|e| {
+            tracing::error!(
+                email = %email,
+                error = ?e,
+                "Error al verificar la contraseña"
+            );
+            AppError::Internal(e.into())
+        })?;
 
     if !valid {
+        tracing::warn!(
+            email = %email,
+            "Intento de login con contraseña incorrecta"
+        );
         return Err(AppError::Unauthorized);
     }
 
@@ -122,6 +174,8 @@ pub async fn login(
         config.jwt_access_ttl_seconds,
     )?;
 
+    let user_id = user.id;
+    let user_role = user.role.clone();
     let response = LoginResponse {
         user: UserPublic {
             email: user.email,
@@ -129,6 +183,12 @@ pub async fn login(
         },
     };
 
+    tracing::info!(
+        email = %email,
+        user_id = %user_id,
+        role = ?user_role,
+        "Usuario autenticado correctamente"
+    );
     Ok((response, token))
 }
 
@@ -147,13 +207,17 @@ pub async fn verify_email(
     repo: &dyn UserRepository,
     token: &str,
 ) -> Result<VerifyEmailResponse, AppError> {
-    let verification = repo
-        .find_verification_token(token)
-        .await?
-        .ok_or_else(|| AppError::BadRequest("Token inválido o ya utilizado".into()))?;
+    let verification = repo.find_verification_token(token).await?.ok_or_else(|| {
+        tracing::warn!("Intento de verificación con token inválido o ya utilizado");
+        AppError::BadRequest("Token inválido o ya utilizado".into())
+    })?;
 
     if verification.expires_at < Utc::now() {
         repo.delete_verification_token(verification.id).await?;
+        tracing::warn!(
+            user_id = %verification.user_id,
+            "Intento de verificación con token expirado"
+        );
         return Err(AppError::BadRequest("El token ha expirado".into()));
     }
 
@@ -161,6 +225,10 @@ pub async fn verify_email(
 
     repo.delete_verification_token(verification.id).await?;
 
+    tracing::info!(
+        user_id = %verification.user_id,
+        "Email verificado correctamente"
+    );
     Ok(VerifyEmailResponse {
         message: "Email verificado correctamente".into(),
     })
@@ -173,32 +241,62 @@ pub async fn reset_password(
     let reset_token = repo
         .find_password_reset_token(&payload.token)
         .await?
-        .ok_or_else(|| AppError::BadRequest("Token inválido o ya utilizado".into()))?;
+        .ok_or_else(|| {
+            tracing::warn!("Intento de reseteo de contraseña con token inválido o ya utilizado");
+            AppError::BadRequest("Token inválido o ya utilizado".into())
+        })?;
 
     if reset_token.expires_at < Utc::now() {
         repo.delete_password_reset_token(reset_token.id).await?;
+        tracing::warn!(
+            user_id = %reset_token.user_id,
+            "Intento de reseteo de contraseña con token expirado"
+        );
         return Err(AppError::BadRequest("El token ha expirado".into()));
     }
 
     let password = payload.new_password.clone();
 
     if !password_is_strong(&password) {
+        tracing::warn!(
+            user_id = %reset_token.user_id,
+            "Intento de reseteo de contraseña con contraseña débil"
+        );
         return Err(AppError::Validation(
             "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números".into(),
         ));
     }
 
+    let user_id = reset_token.user_id;
     let password_hash =
         tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
             .await
-            .map_err(|e| AppError::Internal(e.into()))?
-            .map_err(|e| AppError::Internal(e.into()))?;
+            .map_err(|e| {
+                tracing::error!(
+                    user_id = %user_id,
+                    error = ?e,
+                    "Error al hashear la nueva contraseña"
+                );
+                AppError::Internal(e.into())
+            })?
+            .map_err(|e| {
+                tracing::error!(
+                    user_id = %user_id,
+                    error = ?e,
+                    "Error al hashear la nueva contraseña"
+                );
+                AppError::Internal(e.into())
+            })?;
 
     repo.update_password(reset_token.user_id, &password_hash)
         .await?;
 
     repo.delete_password_reset_token(reset_token.id).await?;
 
+    tracing::info!(
+        user_id = %user_id,
+        "Contraseña actualizada correctamente"
+    );
     Ok(ResetPasswordResponse {
         message: "Contraseña actualizada".into(),
     })
@@ -245,6 +343,11 @@ pub async fn recover_password(
         );
     }
 
+    tracing::info!(
+        email = %email,
+        user_id = %user.id,
+        "Email de recuperación enviado correctamente"
+    );
     Ok(RecoverPasswordResponse {
         message: "Si el email existe, se ha enviado un enlace de recuperación".into(),
     })

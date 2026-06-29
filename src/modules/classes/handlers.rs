@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// POST /api/classes
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, user_email = %professor.email))]
 pub async fn create_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -44,7 +44,7 @@ pub async fn create_class(
 }
 
 /// PATCH /api/classes/{id}
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id, user_email = %professor.email))]
 pub async fn update_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -68,7 +68,7 @@ pub async fn update_class(
 }
 
 /// DELETE /api/classes/{id}
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id, user_email = %professor.email))]
 pub async fn delete_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -86,6 +86,7 @@ pub async fn delete_class(
 }
 
 /// GET api/classes
+#[tracing::instrument(skip(state, _auth), fields(user_email = %_auth.user.email))]
 pub async fn get_classes(
     State(state): State<AppState>,
     _auth: AuthenticatedUser,

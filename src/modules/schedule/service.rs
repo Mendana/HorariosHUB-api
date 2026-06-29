@@ -60,6 +60,7 @@ pub async fn copy_schedule(
     to_user: &User,
 ) -> Result<CopyScheduleResponse, AppError> {
     if from_email == to_user.email {
+        tracing::warn!(email = %from_email, "Intento de copiar horario sobre sí mismo");
         return Err(AppError::BadRequest(
             "Cannot copy schedule to self".to_string(),
         ));
@@ -71,6 +72,14 @@ pub async fn copy_schedule(
             to_user: to_user.id,
         })
         .await?;
+    tracing::info!(
+        from_user_id = %from_user.id,
+        from_email = %from_email,
+        to_user_id = %to_user.id,
+        to_email = %to_user.email,
+        copied_count = copied_rows.count,
+        "Horario copiado"
+    );
     Ok(CopyScheduleResponse {
         message: "Copy was successful".into(),
         copied_count: Some(copied_rows.count),
@@ -83,10 +92,10 @@ async fn resolve_user(user_repo: &dyn UserRepository, identifier: &str) -> Resul
             "Invalid identifier: {identifier}"
         )));
     }
-    user_repo
-        .find_by_email(identifier)
-        .await?
-        .ok_or(AppError::NotFound)
+    user_repo.find_by_email(identifier).await?.ok_or_else(|| {
+        tracing::warn!(identifier = %identifier, "Usuario no encontrado al resolver identificador");
+        AppError::NotFound
+    })
 }
 
 fn rows_to_sessions(rows: Vec<ScheduleSubjectRow>) -> Vec<ScheduleSubject> {
