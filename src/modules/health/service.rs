@@ -6,10 +6,13 @@ pub async fn check_health(repo: &dyn HealthRepository) -> HealthResponse {
             status: "ok".to_string(),
             db: "ok".to_string(),
         },
-        Err(_) => HealthResponse {
-            status: "degraded".to_string(),
-            db: "error".to_string(),
-        },
+        Err(e) => {
+            tracing::error!(error = ?e, "Health check fallido: la BD no responde");
+            HealthResponse {
+                status: "degraded".to_string(),
+                db: "error".to_string(),
+            }
+        }
     }
 }
 

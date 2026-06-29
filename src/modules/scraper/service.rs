@@ -21,16 +21,18 @@ pub async fn fetch_csv_from_scraper(scraper_url: &str) -> Result<String, AppErro
         .map_err(|e| AppError::Internal(e.into()))?;
 
     let response = client.post(scraper_url).send().await.map_err(|e| {
+        tracing::error!(url = scraper_url, error = ?e, "No se pudo conectar al scraper");
         AppError::Internal(anyhow::anyhow!(
             "No se pudo conectar al scraper en {scraper_url}: {e}"
         ))
     })?;
 
     if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!(url = scraper_url, status = %status, body = %body, "El scraper respondió con error HTTP");
         return Err(AppError::Internal(anyhow::anyhow!(
-            "El scraper respondió con un error HTTP {}: {}",
-            response.status(),
-            response.text().await.unwrap_or_default()
+            "El scraper respondió con un error HTTP {status}: {body}"
         )));
     }
 

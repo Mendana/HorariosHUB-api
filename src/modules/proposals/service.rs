@@ -24,6 +24,7 @@ pub async fn create_proposal(
 ) -> Result<CreateProposalResponse, AppError> {
     let change = match payload {
         CreateProposalRequest::Create(changes) => {
+            tracing::debug!(subject = %changes.subject, grp = %changes.grp, "Creando propuesta de tipo Create");
             class_repo
                 .upsert_subject_group(&changes.subject, &changes.grp)
                 .await?;
@@ -44,10 +45,14 @@ pub async fn create_proposal(
             .await?
         }
         CreateProposalRequest::Modify(changes) => {
+            tracing::debug!(session_id = %changes.session_id, "Creando propuesta de tipo Modify");
             let session = class_repo
                 .find_by_id(changes.session_id)
                 .await?
-                .ok_or(AppError::NotFound)?;
+                .ok_or_else(|| {
+                    tracing::warn!(session_id = %changes.session_id, "Sesión no encontrada para propuesta de modificación");
+                    AppError::NotFound
+                })?;
 
             repo.create_change(CreateChangeInput {
                 proposed_by,
@@ -66,10 +71,14 @@ pub async fn create_proposal(
             .await?
         }
         CreateProposalRequest::Delete(changes) => {
+            tracing::debug!(session_id = %changes.session_id, "Creando propuesta de tipo Delete");
             let session = class_repo
                 .find_by_id(changes.session_id)
                 .await?
-                .ok_or(AppError::NotFound)?;
+                .ok_or_else(|| {
+                    tracing::warn!(session_id = %changes.session_id, "Sesión no encontrada para propuesta de eliminación");
+                    AppError::NotFound
+                })?;
 
             repo.create_change(CreateChangeInput {
                 proposed_by,
@@ -89,6 +98,12 @@ pub async fn create_proposal(
         }
     };
 
+    tracing::info!(
+        change_id = %change.id,
+        change_type = ?change.change_type,
+        proposed_by = %proposed_by,
+        "Propuesta creada"
+    );
     Ok(CreateProposalResponse::from(change))
 }
 
@@ -98,10 +113,17 @@ pub async fn approve_proposal(
     change_id: Uuid,
     approved_by: Uuid,
 ) -> Result<ApproveProposalResponse, AppError> {
+    tracing::debug!(change_id = %change_id, "Aprobando propuesta");
     let change = proposal_repo.find_by_id(change_id).await?;
     if change.change_status != ChangeStatus::Pending {
+        tracing::warn!(
+            change_id = %change_id,
+            status = ?change.change_status,
+            "Intento de aprobar propuesta que no está pendiente"
+        );
         return Err(AppError::Conflict("Change is not pending".into()));
     }
+    let change_type = change.change_type.clone();
     match change.change_type {
         ChangeType::Create => approve_create(class_repo, change, approved_by).await?,
         ChangeType::Delete => approve_delete(class_repo, change).await?,
@@ -110,6 +132,12 @@ pub async fn approve_proposal(
 
     proposal_repo.approve(change_id).await?;
 
+    tracing::info!(
+        change_id = %change_id,
+        change_type = ?change_type,
+        approved_by = %approved_by,
+        "Propuesta aprobada"
+    );
     Ok(ApproveProposalResponse {
         id: (change_id),
         status: (super::models::ChangeStatus::Approved),
@@ -161,6 +189,11 @@ async fn resolve_session_id(
         return Ok(id);
     }
 
+    tracing::warn!(
+        change_id = %change.id,
+        "session_id es NULL (probable race con scraper), resolviendo por clave natural"
+    );
+
     let subject = change.subject.as_deref().ok_or_else(|| {
         AppError::BadRequest(
             "No se puede resolver la sesión: session_id es NULL y no hay clave natural".into(),
@@ -209,13 +242,20 @@ pub async fn reject_proposal(
     proposal_repo: &dyn ProposalRepository,
     change_id: Uuid,
 ) -> Result<RejectProposalResponse, AppError> {
+    tracing::debug!(change_id = %change_id, "Rechazando propuesta");
     let change = proposal_repo.find_by_id(change_id).await?;
     if change.change_status != ChangeStatus::Pending {
+        tracing::warn!(
+            change_id = %change_id,
+            status = ?change.change_status,
+            "Intento de rechazar propuesta que no está pendiente"
+        );
         return Err(AppError::Conflict("Change is not pending".into()));
     }
 
     proposal_repo.reject(change_id).await?;
 
+    tracing::info!(change_id = %change_id, "Propuesta rechazada");
     Ok(RejectProposalResponse {
         id: (change_id),
         status: (super::models::ChangeStatus::Rejected),

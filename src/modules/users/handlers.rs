@@ -30,7 +30,7 @@ pub async fn get_all_users(
 #[tracing::instrument(
     name = "Change user role",
     skip(state, admin),
-    fields(user_email = %admin.email, user_role = ?admin.role)
+    fields(user_email = %admin.email, user_role = ?admin.role, target_id = %identifier, new_role = %role)
 )]
 pub async fn change_user_role(
     State(state): State<AppState>,
@@ -45,7 +45,7 @@ pub async fn change_user_role(
 #[tracing::instrument(
     name = "Delete user",
     skip(state, admin),
-    fields(user_email = %admin.email, user_role = ?admin.role)
+    fields(user_email = %admin.email, user_role = ?admin.role, target_id = %identifier)
 )]
 pub async fn delete_user(
     State(state): State<AppState>,

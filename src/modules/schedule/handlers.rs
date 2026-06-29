@@ -11,7 +11,7 @@ use axum::{Json, extract::State};
 
 /// GET /api/schedule/{identifier}?start={fechaInicial}
 /// GET /api/schedule/{identifier}?month={YYYY-MM}
-#[tracing::instrument(skip(state), fields(identifier = %identifier))]
+#[tracing::instrument(skip(state, query), fields(identifier = %identifier))]
 pub async fn get_schedule(
     State(state): State<AppState>,
     Path(identifier): Path<String>,
@@ -47,6 +47,7 @@ pub async fn get_schedule(
 }
 
 /// POST /api/schedule/copy?user=user_email
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email, from_email = %payload.user))]
 pub async fn copy_schedule(
     State(state): State<AppState>,
     auth: AuthenticatedUser,

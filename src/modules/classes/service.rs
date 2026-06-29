@@ -25,8 +25,11 @@ pub async fn create_class(
     payload: CreateClassRequest,
     created_by: Uuid,
 ) -> Result<ClassItem, AppError> {
+    tracing::debug!(subject = ?payload.subject, group_id = ?payload.group_id, "Creando clase");
+
     let duration_min = (payload.end_time - payload.start_time).num_minutes();
     validate_duration(duration_min)?;
+
     let duration_min = duration_min as i32;
 
     let (subject, subject_type) = resolve_subject_group(
@@ -39,7 +42,11 @@ pub async fn create_class(
 
     class_repo
         .upsert_subject_group(&subject, &subject_type)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al upsertar subject y subject_type");
+            e
+        })?;
 
     let session = class_repo
         .create_session(
@@ -50,7 +57,11 @@ pub async fn create_class(
             payload.classroom.as_deref(),
             created_by,
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al crear sesión");
+            e
+        })?;
 
     proposals_repo
         .create_change(CreateChangeInput {
@@ -67,8 +78,13 @@ pub async fn create_class(
             prev_classroom: None,
             status: ChangeStatus::Approved,
         })
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al crear propuesta de cambio");
+            e
+        })?;
 
+    tracing::info!(session_id = %session.id, subject = %session.subject, grp = %session.grp, created_by = %created_by, "Clase creada");
     Ok(session_to_class_item(session))
 }
 
@@ -79,11 +95,21 @@ pub async fn update_class(
     professor_id: Uuid,
     payload: UpdateClassRequest,
 ) -> Result<ClassItem, AppError> {
-    let existing = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+    tracing::debug!(session_id = %id, "Actualizando clase");
+
+    let existing = class_repo.find_by_id(id).await?.ok_or_else(|| {
+        tracing::warn!(session_id = %id, "Clase no encontrada");
+        AppError::NotFound
+    })?;
 
     // Si viene group_id, resuelve subject/subject_type a partir de él
     let (resolved_subject, resolved_subject_type) = if payload.group_id.is_some() {
-        let (s, st) = resolve_subject_group(payload.group_id, None, None, class_repo).await?;
+        let (s, st) = resolve_subject_group(payload.group_id, None, None, class_repo)
+            .await
+            .map_err(|e| {
+                tracing::error!(?e, "Error al resolver subject y subject_type");
+                e
+            })?;
         (Some(s), Some(st))
     } else {
         (payload.subject, payload.subject_type)
@@ -114,7 +140,11 @@ pub async fn update_class(
             new_duration_min,
             payload.classroom.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al actualizar sesión");
+            e
+        })?;
 
     proposals_repo
         .create_change(CreateChangeInput {
@@ -137,8 +167,13 @@ pub async fn update_class(
             prev_classroom: existing.classroom.clone(),
             status: ChangeStatus::Approved,
         })
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al crear propuesta de cambio");
+            e
+        })?;
 
+    tracing::info!(session_id = %session.id, subject = %session.subject, grp = %session.grp, updated_by = %professor_id, "Clase actualizada");
     Ok(session_to_class_item(session))
 }
 
@@ -153,8 +188,12 @@ pub async fn delete_class(
     id: Uuid,
     professor_id: Uuid,
 ) -> Result<DeleteClassResponse, AppError> {
-    // Verificar que la sesión existe antes de intentar eliminarla
-    let session = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+    tracing::debug!(session_id = %id, "Eliminando clase");
+
+    let session = class_repo.find_by_id(id).await?.ok_or_else(|| {
+        tracing::warn!(session_id = %id, "Clase no encontrada para eliminar");
+        AppError::NotFound
+    })?;
 
     proposals_repo
         .create_change(CreateChangeInput {
@@ -175,6 +214,13 @@ pub async fn delete_class(
 
     class_repo.delete_session(id).await?;
 
+    tracing::info!(
+        session_id = %id,
+        subject = %session.subject,
+        grp = %session.grp,
+        deleted_by = %professor_id,
+        "Clase eliminada"
+    );
     Ok(DeleteClassResponse {
         message: "Clase eliminada".into(),
     })
