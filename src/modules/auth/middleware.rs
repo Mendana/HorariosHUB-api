@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::errors::AppError;
 use crate::jwt;
-use crate::modules::auth::models::{User, UserRole};
+use crate::modules::users::models::{User, UserRole};
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::header::{AUTHORIZATION, COOKIE};
 use axum::http::request::Parts;
@@ -24,21 +24,39 @@ where
         let state = AppState::from_ref(state);
 
         let token = extract_bearer(parts).or_else(|| extract_cookie(parts, "access_token"));
-        let token = token.ok_or(AppError::Unauthorized)?;
+        let token = token.ok_or({
+            tracing::warn!("No se encontró token de autenticación en la cabecera ni en la cookie");
+            AppError::Unauthorized
+        })?;
 
-        let claims = jwt::verify_token(&token, &state.config.jwt_secret)?;
+        let claims = jwt::verify_token(&token, &state.config.jwt_secret).map_err(|e| {
+            tracing::warn!(error = ?e, "JWT inválido o expirado");
+            AppError::Unauthorized
+        })?;
         let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Unauthorized)?;
 
-        let user = state
-            .user_repo
-            .find_by_id(user_id)
-            .await?
-            .ok_or(AppError::Unauthorized)?;
+        let user = state.user_repo.find_by_id(user_id).await?.ok_or({
+            tracing::warn!(
+                user_id = %user_id,
+                "JWT válido pero usuario no existe en BBDD"
+            );
+            AppError::Unauthorized
+        })?;
 
         if !user.verified {
+            tracing::warn!(
+                user_id = %user_id,
+                "Usuario no verificado"
+            );
             return Err(AppError::Forbidden);
         }
 
+        tracing::debug!(
+            user_id = %user_id,
+            email = %user.email,
+            role = ?user.role,
+            "Usuario autenticado y verificado"
+        );
         Ok(AuthenticatedUser { user })
     }
 }
@@ -57,9 +75,21 @@ where
         let auth = AuthenticatedUser::from_request_parts(parts, state).await?;
 
         if auth.user.role != UserRole::Admin {
+            tracing::warn!(
+                user_id = %auth.user.id,
+                email = %auth.user.email,
+                role = ?auth.user.role,
+                "Usuario autenticado pero no tiene rol Admin"
+            );
             return Err(AppError::Forbidden);
         }
 
+        tracing::debug!(
+            user_id = %auth.user.id,
+            email = %auth.user.email,
+            role = ?auth.user.role,
+            "Usuario autenticado con rol Admin"
+        );
         Ok(AdminUser(auth.user))
     }
 }
@@ -78,8 +108,24 @@ where
         let auth = AuthenticatedUser::from_request_parts(parts, state).await?;
 
         match auth.user.role {
-            UserRole::Professor | UserRole::Admin => Ok(ProfessorOrAbove(auth.user)),
-            _ => Err(AppError::Forbidden),
+            UserRole::Professor | UserRole::Admin => {
+                tracing::debug!(
+                    user_id = %auth.user.id,
+                    email = %auth.user.email,
+                    role = ?auth.user.role,
+                    "Usuario autenticado con rol Professor o superior"
+                );
+                Ok(ProfessorOrAbove(auth.user))
+            }
+            _ => {
+                tracing::warn!(
+                    user_id = %auth.user.id,
+                    email = %auth.user.email,
+                    role = ?auth.user.role,
+                    "Usuario autenticado pero no tiene rol Professor o superior"
+                );
+                Err(AppError::Forbidden)
+            }
         }
     }
 }

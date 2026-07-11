@@ -3,12 +3,14 @@ pub mod config;
 pub mod db;
 pub mod errors;
 pub mod jwt;
+pub mod metrics;
 pub mod modules;
 pub mod seed;
 pub mod services;
 pub mod utils;
 
 use axum::Router;
+use axum::http::{HeaderValue, Method, header};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -17,19 +19,21 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLay
 use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::modules::auth::repository::{PgUserRepository, UserRepository};
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
+use crate::modules::health::repository::{HealthRepository, PgHealthRepository};
 use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
 use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
 use crate::modules::scraper::repository::{PgScraperRepository, ScraperRepository};
 use crate::modules::scraper::service::run_sync;
 use crate::modules::subjects::repository::{PgSubjectRepository, SubjectRepository};
+use crate::modules::users::repository::{PgUserRepository, UserRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
 // Estado compartido que Axum inyecta en cada handler
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Arc<sqlx::PgPool>,
+    pub health_repo: Arc<dyn HealthRepository>,
     pub user_repo: Arc<dyn UserRepository>,
     pub schedule_repo: Arc<dyn ScheduleRepository>,
     pub class_repo: Arc<dyn ClassRepository>,
@@ -89,8 +93,12 @@ pub async fn run() -> anyhow::Result<()> {
 
     let auto_select_semaphore = Arc::new(Semaphore::new(config.auto_select_max_concurrent));
 
+    // 6.5 Levantamos prometheus
+    let prometheus_handle = metrics::setup_recorder();
+
     // 7. Estado
     let state = AppState {
+        health_repo: Arc::new(PgHealthRepository::new(pool.clone())),
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
         class_repo: Arc::new(PgClassRepository::new(pool.clone())),
         proposals_repo: Arc::new(PgProposalRepository::new(pool.clone())),
@@ -108,23 +116,44 @@ pub async fn run() -> anyhow::Result<()> {
     start_scraper_scheduler(state.clone()).await?;
 
     // 9. Router
+    let cors = CorsLayer::new()
+        .allow_origin(config.allowed_origin.parse::<HeaderValue>().unwrap())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([header::CONTENT_TYPE])
+        .allow_credentials(true);
+
     let app = Router::new()
         .merge(modules::routes(true))
+        .layer(axum::middleware::from_fn(metrics::track_http_metrics))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
-        .layer(CorsLayer::permissive())
+        .layer(cors)
         .with_state(state);
+
+    // 9.5 Anidamos el prometheus a un router interno
+    let metrics_app = metrics::metrics_router(prometheus_handle);
 
     // 10. Servidor
     let addr = format!("0.0.0.0:{}", config.server_port);
+    let metrics_addr = format!("0.0.0.0:{}", config.metrics_port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Servidor escuchando en {}", addr);
+    let metrics_listener = tokio::net::TcpListener::bind(&metrics_addr).await?;
+    tracing::info!("Métricas (interno) escuchando en {}", metrics_addr);
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    tokio::try_join!(
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>()
+        ),
+        axum::serve(metrics_listener, metrics_app),
+    )?;
     Ok(())
 }
 
@@ -199,6 +228,7 @@ pub async fn create_test_app_with_scraper(
     let scraper_repo = Arc::new(PgScraperRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
+        health_repo: Arc::new(PgHealthRepository::new((*pool).clone())),
         user_repo,
         class_repo,
         proposals_repo,
@@ -222,6 +252,8 @@ pub async fn create_test_app_with_scraper(
             scraper_url: scraper_url.to_string(),
             scraper_min_sessions: 1000,
             auto_select_max_concurrent: 5,
+            allowed_origin: "http://localhost:3000".to_string(),
+            metrics_port: 9090,
         }),
         auto_select_semaphore: Arc::new(Semaphore::new(5)),
     };

@@ -12,7 +12,7 @@ use crate::{
 ///POST /scraper/sync
 ///
 ///Dispara la sincronización manual
-#[tracing::instrument(skip(state, admin), fields(user_id = %admin.id))]
+#[tracing::instrument(skip(state, admin), fields(user_id = %admin.id, user_email = %admin.email))]
 pub async fn trigger_sync(
     State(state): State<AppState>,
     AdminUser(admin): AdminUser,

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -9,21 +9,18 @@ use crate::{
 
 #[async_trait::async_trait]
 pub trait ScheduleRepository: Send + Sync {
-    /// Busca las sesiones programadas para un usuario en una semana a partir de una fecha dada
-    ///
-    /// Devuelve una lista de filas con la información de cada sesión programada
+    /// Busca las sesiones programadas para un usuario en un rango de fechas
     ///
     /// # Errores:
     /// - [`AppError::Internal`] para errores en la consulta a la base de datos (e.g. conexión)
-    async fn fetch_user_weekly_schedule_rows(
+    async fn fetch_user_schedule_rows(
         &self,
         user_id: &Uuid,
         start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
     ) -> Result<Vec<ScheduleSubjectRow>, AppError>;
 
     /// Copiar horario de otro usuario al propio
-    ///
-    /// Devuelve el número de filas copiadas
     ///
     /// # Errores
     /// - [`AppError::Internal`] para errores en la consulta a la base de datos (e.g. conexión)
@@ -43,13 +40,12 @@ impl PgScheduleRepository {
 
 #[async_trait::async_trait]
 impl ScheduleRepository for PgScheduleRepository {
-    async fn fetch_user_weekly_schedule_rows(
+    async fn fetch_user_schedule_rows(
         &self,
         user_id: &Uuid,
         start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
     ) -> Result<Vec<ScheduleSubjectRow>, AppError> {
-        let end_time = start_time + Duration::days(7);
-
         let rows = sqlx::query_as!(
             ScheduleSubjectRow,
             r#"
@@ -58,7 +54,8 @@ impl ScheduleRepository for PgScheduleRepository {
             s.subject,
             s.grp AS "group",
             se.starts_at,
-            se.duration_min
+            se.duration_min,
+            se.classroom
         FROM schedule s
         JOIN sessions se
         ON se.subject = s.subject

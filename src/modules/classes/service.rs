@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{Duration, NaiveDate, NaiveTime, TimeZone, Utc, Weekday};
 use uuid::Uuid;
 
 use crate::{
@@ -6,8 +6,9 @@ use crate::{
     modules::{
         classes::{
             models::{
-                CreateClassRequest, CreateClassResponse, DeleteClassResponse, Session,
-                UpdateClassRequest, UpdateClassResponse,
+                ClassItem, CreateClassRequest, DeleteClassResponse, ListClassesQueryParams,
+                ListClassesResponse, ListClassesSortDirection, ListClassesSortOption,
+                ListSessionsParams, Session, UpdateClassRequest,
             },
             repository::ClassRepository,
         },
@@ -18,47 +19,49 @@ use crate::{
     },
 };
 
-/// Crea una nueva clase (sesión) en el sistema.
-///
-/// # Flujo
-/// 1. Parsea fecha y hora de inicio
-/// 2. Calcula el end_time a partir de durationMinutes
-/// 3. Upsert del subjectGroup si no existe
-/// 4. Inserta la sesón con source manual
-///
-/// # Errores
-/// - [`AppError::BadRequest`] si la fecha o el formato de hora son inválidos
 pub async fn create_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
     payload: CreateClassRequest,
     created_by: Uuid,
-) -> Result<CreateClassResponse, AppError> {
-    let date = NaiveDate::from_ymd_opt(payload.date.year, payload.date.month, payload.date.day)
-        .ok_or_else(|| AppError::BadRequest("Fecha inválida".into()))?;
+) -> Result<ClassItem, AppError> {
+    tracing::debug!(subject = ?payload.subject, group_id = ?payload.group_id, "Creando clase");
 
-    let start_time = NaiveTime::parse_from_str(&payload.start_time, "%H:%M").map_err(|_| {
-        AppError::BadRequest("Formato de hora de inicio inválido, usar HH:MM".into())
-    })?;
+    let duration_min = (payload.end_time - payload.start_time).num_minutes();
+    validate_duration(duration_min)?;
 
-    let end_time = start_time + Duration::minutes(payload.duration_minutes as i64);
+    let duration_min = duration_min as i32;
 
-    let starts_at = Utc.from_utc_datetime(&NaiveDateTime::new(date, start_time));
+    let (subject, subject_type) = resolve_subject_group(
+        payload.group_id,
+        payload.subject,
+        payload.subject_type,
+        class_repo,
+    )
+    .await?;
 
     class_repo
-        .upsert_subject_group(&payload.name, &payload.r#type)
-        .await?;
+        .upsert_subject_group(&subject, &subject_type)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al upsertar subject y subject_type");
+            e
+        })?;
 
     let session = class_repo
         .create_session(
-            &payload.name,
-            &payload.r#type,
-            starts_at,
-            payload.duration_minutes,
+            &subject,
+            &subject_type,
+            payload.start_time,
+            duration_min,
             payload.classroom.as_deref(),
             created_by,
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al crear sesión");
+            e
+        })?;
 
     proposals_repo
         .create_change(CreateChangeInput {
@@ -75,78 +78,73 @@ pub async fn create_class(
             prev_classroom: None,
             status: ChangeStatus::Approved,
         })
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al crear propuesta de cambio");
+            e
+        })?;
 
-    Ok(build_response(session, end_time))
+    tracing::info!(session_id = %session.id, subject = %session.subject, grp = %session.grp, created_by = %created_by, "Clase creada");
+    Ok(session_to_class_item(session))
 }
 
-/// Modifica una sesión existente
-///
-/// Marca automáticamente is_overridden a true para que el scrapper sepa que hay
-/// cambios manuales aplicados y no sobreescriba sin gestionar el conflicto
-///
-/// # Errores
-/// - [`AppError::BadRequest`] si la fecha o el formato de hora son inválidos
-/// - [`AppError::NotFound`] si no se encuentra la sesión a modificar
 pub async fn update_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
     id: Uuid,
     professor_id: Uuid,
     payload: UpdateClassRequest,
-) -> Result<UpdateClassResponse, AppError> {
-    let existing = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+) -> Result<ClassItem, AppError> {
+    tracing::debug!(session_id = %id, "Actualizando clase");
 
-    // Parsear fecha (si viene)
-    let new_date = payload
-        .date
-        .as_ref()
-        .map(|d| {
-            NaiveDate::from_ymd_opt(d.year, d.month, d.day)
-                .ok_or_else(|| AppError::BadRequest("Fecha inválida".into()))
-        })
-        .transpose()?;
+    let existing = class_repo.find_by_id(id).await?.ok_or_else(|| {
+        tracing::warn!(session_id = %id, "Clase no encontrada");
+        AppError::NotFound
+    })?;
 
-    // Parsear hora de inicio (si viene)
-    let new_start_time = payload
-        .start_time
-        .as_deref()
-        .map(|t| {
-            NaiveTime::parse_from_str(t, "%H:%M").map_err(|_| {
-                AppError::BadRequest("Formato de hora de inicio inválido, usar HH:MM".into())
-            })
-        })
-        .transpose()?;
-
-    // Calcular starts_at si cambia fecha u hora
-    let new_starts_at = match (new_date, new_start_time) {
-        (None, None) => None,
-        (date, time) => {
-            let date = date.unwrap_or_else(|| existing.starts_at.date_naive());
-            let time = time.unwrap_or_else(|| existing.starts_at.time());
-            Some(Utc.from_utc_datetime(&NaiveDateTime::new(date, time)))
-        }
+    // Si viene group_id, resuelve subject/subject_type a partir de él
+    let (resolved_subject, resolved_subject_type) = if payload.group_id.is_some() {
+        let (s, st) = resolve_subject_group(payload.group_id, None, None, class_repo)
+            .await
+            .map_err(|e| {
+                tracing::error!(?e, "Error al resolver subject y subject_type");
+                e
+            })?;
+        (Some(s), Some(st))
+    } else {
+        (payload.subject, payload.subject_type)
     };
 
-    // Calcular duración efectiva (si viene nueva duración usarla, sino mantener la existente)
-    let effective_duration = payload.duration_minutes.unwrap_or(existing.duration_min);
-
-    // Calcular end_time a partir de starts_at efectiva y duración efectiva
-    let effective_start = new_starts_at.unwrap_or(existing.starts_at);
-
-    // Calcular end_time a partir de effective_start y effective_duration
-    let end_time = effective_start.time() + Duration::minutes(effective_duration as i64);
+    let new_starts_at = payload.start_time;
+    let new_duration_min = match (payload.start_time, payload.end_time) {
+        (Some(start), Some(end)) => {
+            let mins = (end - start).num_minutes();
+            validate_duration(mins)?;
+            Some(mins as i32)
+        }
+        (Some(_start), None) => None, // mantener duración original
+        (None, Some(end)) => {
+            let mins = (end - existing.starts_at).num_minutes();
+            validate_duration(mins)?;
+            Some(mins as i32)
+        }
+        (None, None) => None,
+    };
 
     let session = class_repo
         .update_session(
             id,
-            payload.name.as_deref(),
-            payload.r#type.as_deref(),
+            resolved_subject.as_deref(),
+            resolved_subject_type.as_deref(),
             new_starts_at,
-            payload.duration_minutes,
+            new_duration_min,
             payload.classroom.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al actualizar sesión");
+            e
+        })?;
 
     proposals_repo
         .create_change(CreateChangeInput {
@@ -169,9 +167,14 @@ pub async fn update_class(
             prev_classroom: existing.classroom.clone(),
             status: ChangeStatus::Approved,
         })
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "Error al crear propuesta de cambio");
+            e
+        })?;
 
-    Ok(build_response(session, end_time))
+    tracing::info!(session_id = %session.id, subject = %session.subject, grp = %session.grp, updated_by = %professor_id, "Clase actualizada");
+    Ok(session_to_class_item(session))
 }
 
 /// Elimina una sesión existente por su ID
@@ -185,8 +188,12 @@ pub async fn delete_class(
     id: Uuid,
     professor_id: Uuid,
 ) -> Result<DeleteClassResponse, AppError> {
-    // Verificar que la sesión existe antes de intentar eliminarla
-    let session = class_repo.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+    tracing::debug!(session_id = %id, "Eliminando clase");
+
+    let session = class_repo.find_by_id(id).await?.ok_or_else(|| {
+        tracing::warn!(session_id = %id, "Clase no encontrada para eliminar");
+        AppError::NotFound
+    })?;
 
     proposals_repo
         .create_change(CreateChangeInput {
@@ -207,23 +214,130 @@ pub async fn delete_class(
 
     class_repo.delete_session(id).await?;
 
+    tracing::info!(
+        session_id = %id,
+        subject = %session.subject,
+        grp = %session.grp,
+        deleted_by = %professor_id,
+        "Clase eliminada"
+    );
     Ok(DeleteClassResponse {
         message: "Clase eliminada".into(),
     })
 }
 
-fn build_response(session: Session, end_time: NaiveTime) -> CreateClassResponse {
-    let start = session.starts_at.format("%H:%M").to_string();
-    let date = session.starts_at.format("%Y-%m-%d").to_string();
+pub async fn get_classes(
+    class_repo: &dyn ClassRepository,
+    params: ListClassesQueryParams,
+) -> Result<ListClassesResponse, AppError> {
+    let (week_start, week_end) = match &params.week {
+        Some(w) => {
+            let (start, end) = parse_iso_week(w)?;
+            (Some(start), Some(end))
+        }
+        None => (None, None),
+    };
 
-    CreateClassResponse {
+    let page = params.page.unwrap_or(1).max(1) as i64;
+    let limit = params.limit.unwrap_or(20).min(100) as i64;
+    let offset = (page - 1) * limit;
+
+    let order_col = match params.sort.unwrap_or(ListClassesSortOption::Date) {
+        ListClassesSortOption::Name => "subject",
+        ListClassesSortOption::Type => "grp",
+        ListClassesSortOption::Date => "starts_at",
+    };
+    let order_dir = match params.dir.unwrap_or(ListClassesSortDirection::Asc) {
+        ListClassesSortDirection::Asc => "ASC",
+        ListClassesSortDirection::Desc => "DESC",
+    };
+
+    let (rows, total) = class_repo
+        .list_sessions(ListSessionsParams {
+            search: params.search.as_deref(),
+            week_start,
+            week_end,
+            order_col,
+            order_dir,
+            limit,
+            offset,
+        })
+        .await?;
+
+    let classes = rows
+        .into_iter()
+        .map(|r| ClassItem {
+            id: r.id,
+            subject: r.subject,
+            subject_type: r.grp,
+            classroom: r.classroom,
+            start_time: r.starts_at,
+            end_time: r.starts_at + Duration::minutes(r.duration_min as i64),
+        })
+        .collect();
+
+    Ok(ListClassesResponse { classes, total })
+}
+
+async fn resolve_subject_group(
+    group_id: Option<Uuid>,
+    subject: Option<String>,
+    subject_type: Option<String>,
+    class_repo: &dyn ClassRepository,
+) -> Result<(String, String), AppError> {
+    if let Some(gid) = group_id {
+        return class_repo
+            .find_subject_group_by_id(gid)
+            .await?
+            .ok_or(AppError::NotFound);
+    }
+    match (subject, subject_type) {
+        (Some(s), Some(st)) => Ok((s, st)),
+        _ => Err(AppError::BadRequest(
+            "Se requiere groupId o los campos subject y subjectType".into(),
+        )),
+    }
+}
+
+fn parse_iso_week(week: &str) -> Result<(chrono::DateTime<Utc>, chrono::DateTime<Utc>), AppError> {
+    let err =
+        || AppError::BadRequest("El formato de semana debe ser YYYY-Www (ej: 2026-W24)".into());
+
+    let (year_str, week_str) = week.split_once("-W").ok_or_else(err)?;
+    let year: i32 = year_str.parse().map_err(|_| err())?;
+    let week_num: u32 = week_str.parse().map_err(|_| err())?;
+
+    let monday = NaiveDate::from_isoywd_opt(year, week_num, Weekday::Mon).ok_or_else(err)?;
+    let next_monday = monday + Duration::days(7);
+
+    Ok((
+        Utc.from_utc_datetime(&monday.and_time(NaiveTime::MIN)),
+        Utc.from_utc_datetime(&next_monday.and_time(NaiveTime::MIN)),
+    ))
+}
+
+fn validate_duration(minutes: i64) -> Result<(), AppError> {
+    if minutes <= 0 {
+        return Err(AppError::BadRequest(
+            "endTime debe ser posterior a startTime".into(),
+        ));
+    }
+    if minutes % 30 != 0 {
+        return Err(AppError::BadRequest(
+            "La duración debe ser múltiplo de 30 minutos".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn session_to_class_item(session: Session) -> ClassItem {
+    let end_time = session.starts_at + Duration::minutes(session.duration_min as i64);
+    ClassItem {
         id: session.id,
-        name: session.subject,
-        r#type: session.grp,
-        date,
-        start_time: start,
-        end_time: end_time.format("%H:%M").to_string(),
-        duration_minutes: session.duration_min,
+        subject: session.subject,
+        subject_type: session.grp,
         classroom: session.classroom,
+        start_time: session.starts_at,
+        end_time,
     }
 }

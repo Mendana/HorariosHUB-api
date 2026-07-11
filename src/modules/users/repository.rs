@@ -1,8 +1,5 @@
-use super::models::{User, UserRole};
-use crate::{
-    errors::AppError,
-    modules::auth::models::{PasswordResetToken, VerificationToken},
-};
+use super::models::{PasswordResetToken, User, UserRole, VerificationToken};
+use crate::errors::AppError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -108,6 +105,27 @@ pub trait UserRepository: Send + Sync {
     /// # Errores:
     /// - [`AppError::Internal`] para errores en la eliminación en la base de datos
     async fn delete_password_reset_token(&self, token_id: uuid::Uuid) -> Result<(), AppError>;
+
+    /// Devuelve todos los usuarios de la base de datos
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
+    async fn get_all_users(&self) -> Result<Vec<User>, AppError>;
+
+    /// Cambia el rol del usuario con el identificador dado al nuevo rol proporcionado
+    /// Devuelve `Ok(())` si la operación fue exitosa
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la actualización en la base de datos
+    /// - [`AppError::NotFound`] si no existe un usuario con el identificador
+    async fn change_user_role(&self, identifier: Uuid, new_role: UserRole) -> Result<(), AppError>;
+
+    /// Elimina el usuario con el identificador dado de la base de datos
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la eliminación en la base de datos
+    /// - [`AppError::NotFound`] si no existe un usuario con el identificador dado
+    async fn delete_user(&self, identifier: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgUserRepository {
@@ -322,6 +340,52 @@ impl UserRepository for PgUserRepository {
         sqlx::query!("DELETE FROM password_reset_tokens WHERE id = $1", token_id)
             .execute(&self.pool)
             .await?;
+
+        Ok(())
+    }
+
+    async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+        let users = sqlx::query_as!(
+            User,
+            r#"
+            SELECT id, email, password_hash, role AS "role: UserRole", verified
+            FROM users
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(users)
+    }
+
+    async fn change_user_role(&self, identifier: Uuid, new_role: UserRole) -> Result<(), AppError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE users
+            SET role = $1
+            WHERE id = $2
+            "#,
+            new_role as UserRole,
+            identifier
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    async fn delete_user(&self, identifier: Uuid) -> Result<(), AppError> {
+        let result = sqlx::query!("DELETE FROM users WHERE id = $1", identifier)
+            .execute(&self.pool)
+            .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
 
         Ok(())
     }

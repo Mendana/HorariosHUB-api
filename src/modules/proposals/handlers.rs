@@ -22,7 +22,7 @@ use crate::{
     },
 };
 
-#[tracing::instrument(skip(state, auth, payload), fields(user_id = %auth.user.id, change_type = %payload.change_type()))]
+#[tracing::instrument(skip(state, auth, payload), fields(user_id = %auth.user.id, user_email = %auth.user.email, change_type = %payload.change_type()))]
 pub async fn create_proposal(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -43,7 +43,7 @@ pub async fn create_proposal(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, user_email = %professor.email, proposal_id = %id))]
 pub async fn approve_proposal(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -60,7 +60,7 @@ pub async fn approve_proposal(
     Ok((StatusCode::OK, Json(response)))
 }
 
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, user_email = %professor.email, proposal_id = %id))]
 pub async fn reject_proposal(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -75,7 +75,7 @@ pub async fn reject_proposal(
 ///
 /// Devulve una lista paginada de propuestas,
 /// filtradas por estado (pending, approved, rejected).
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, user_email = %professor.email))]
 pub async fn list_proposals(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -95,7 +95,7 @@ pub async fn list_proposals(
 /// GET /proposals/mine?page=1&limit=10
 ///
 /// Devuelve una lista paginada de propuestas creadas por el usuario autenticado.
-#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id))]
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
 pub async fn list_my_proposals(
     State(state): State<AppState>,
     auth: AuthenticatedUser,

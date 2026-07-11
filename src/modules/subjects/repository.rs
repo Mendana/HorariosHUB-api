@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::AppError,
-    modules::subjects::models::{JobStatusRow, SubjectGroupRow},
+    modules::subjects::models::{GroupEntryWithoutSelection, JobStatusRow, SubjectGroupRow},
 };
 
 #[async_trait::async_trait]
@@ -38,6 +38,13 @@ pub trait SubjectRepository: Send + Sync {
         &self,
         user_id: Uuid,
     ) -> Result<Option<JobStatusRow>, AppError>;
+
+    async fn get_all_subjects_catalog(&self) -> Result<Vec<String>, AppError>;
+
+    async fn get_all_groups_per_subject(
+        &self,
+        subject: &str,
+    ) -> Result<Vec<GroupEntryWithoutSelection>, AppError>;
 }
 
 pub struct PgSubjectRepository {
@@ -243,5 +250,41 @@ impl SubjectRepository for PgSubjectRepository {
         .await?;
 
         Ok(row)
+    }
+
+    async fn get_all_subjects_catalog(&self) -> Result<Vec<String>, AppError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT subject
+            FROM subject_groups
+            ORDER BY subject
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let subjects = rows.into_iter().map(|row| row.subject).collect();
+
+        Ok(subjects)
+    }
+
+    async fn get_all_groups_per_subject(
+        &self,
+        subject: &str,
+    ) -> Result<Vec<GroupEntryWithoutSelection>, AppError> {
+        let rows = sqlx::query_as!(
+            GroupEntryWithoutSelection,
+            r#"
+            SELECT id AS "id!", grp AS "name!"
+            FROM subject_groups
+            WHERE subject = $1
+            ORDER BY grp
+            "#,
+            subject
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
     }
 }

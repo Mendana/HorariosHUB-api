@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use uuid::Uuid;
@@ -10,10 +10,11 @@ use crate::{
     AppState,
     errors::{ApiResult, AppError},
     modules::{
-        auth::middleware::ProfessorOrAbove,
+        auth::middleware::{AuthenticatedUser, ProfessorOrAbove},
         classes::{
             models::{
-                CreateClassRequest, CreateClassResponse, DeleteClassResponse, UpdateClassRequest,
+                ClassItem, CreateClassRequest, DeleteClassResponse, ListClassesQueryParams,
+                ListClassesResponse, UpdateClassRequest,
             },
             service,
         },
@@ -21,12 +22,12 @@ use crate::{
 };
 
 /// POST /api/classes
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, subject = %payload.name))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, user_email = %professor.email))]
 pub async fn create_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
     Json(payload): Json<CreateClassRequest>,
-) -> ApiResult<(StatusCode, Json<CreateClassResponse>)> {
+) -> ApiResult<(StatusCode, Json<ClassItem>)> {
     payload
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
@@ -43,13 +44,13 @@ pub async fn create_class(
 }
 
 /// PATCH /api/classes/{id}
-#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id))]
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id, user_email = %professor.email))]
 pub async fn update_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateClassRequest>,
-) -> ApiResult<Json<CreateClassResponse>> {
+) -> ApiResult<Json<ClassItem>> {
     payload
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
@@ -67,6 +68,7 @@ pub async fn update_class(
 }
 
 /// DELETE /api/classes/{id}
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, session_id = %id, user_email = %professor.email))]
 pub async fn delete_class(
     State(state): State<AppState>,
     ProfessorOrAbove(professor): ProfessorOrAbove,
@@ -81,4 +83,15 @@ pub async fn delete_class(
     .await?;
 
     Ok(Json(response))
+}
+
+/// GET api/classes
+#[tracing::instrument(skip(state, _auth), fields(user_email = %_auth.user.email))]
+pub async fn get_classes(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+    Query(params): Query<ListClassesQueryParams>,
+) -> ApiResult<(StatusCode, Json<ListClassesResponse>)> {
+    let response = service::get_classes(state.class_repo.as_ref(), params).await?;
+    Ok((StatusCode::OK, Json(response)))
 }

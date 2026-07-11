@@ -1,11 +1,12 @@
 use super::middleware::AuthenticatedUser;
-use super::models::{RegisterRequest, RegisterResponse, UserPublic};
+use super::models::{RegisterRequest, RegisterResponse};
 use super::service;
 use crate::errors::AppError;
 use crate::modules::auth::models::{
     LoginRequest, LogoutResponse, RecoverPasswordRequest, RecoverPasswordResponse,
     ResetPasswordRequest, ResetPasswordResponse, VerifyEmailQuery, VerifyEmailResponse,
 };
+use crate::modules::users::models::UserPublic;
 use crate::{AppState, errors::ApiResult};
 use axum::extract::Query;
 use axum::http::{HeaderMap, HeaderValue, header};
@@ -77,7 +78,7 @@ pub async fn login(
 /// GET /auth/verify-email?token=abc123
 ///
 /// Verifica el email del usuario utilizando un token de verificación
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, query), fields(token = %query.token))]
 pub async fn verify_email(
     State(state): State<AppState>,
     Query(query): Query<VerifyEmailQuery>,

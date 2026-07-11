@@ -1,6 +1,6 @@
 // src/jwt.rs
 use crate::errors::AppError;
-use crate::modules::auth::models::UserRole;
+use crate::modules::users::models::UserRole;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -57,7 +57,7 @@ pub fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
 
 #[cfg(test)]
 mod jwt_unit_tests {
-    use crate::{jwt, modules::auth::models::UserRole};
+    use crate::{jwt, modules::users::models::UserRole};
     use uuid::Uuid;
 
     #[test]

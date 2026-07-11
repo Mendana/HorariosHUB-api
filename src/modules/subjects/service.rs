@@ -8,7 +8,8 @@ use crate::{
     modules::subjects::{
         models::{
             AutoSelectResponse, AutoSelectStatus, AutoSelectStatusResponse, CatalogResponse,
-            GroupEntry, JobStatusRow, SubjectEntry, UserSelectionResponse,
+            GroupEntry, GroupEntryWithoutSelection, JobStatusRow, SubjectEntry,
+            UserSelectionResponse,
         },
         repository::SubjectRepository,
     },
@@ -52,10 +53,12 @@ pub async fn set_user_selection_destructive(
     groups_ids: Vec<Uuid>,
 ) -> Result<UserSelectionResponse, AppError> {
     let groups_len = groups_ids.len();
+    tracing::debug!(user_id = %user_id, count = groups_len, "Guardando selección de asignaturas");
 
     repo.set_user_selection_destructive(user_id, groups_ids)
         .await?;
 
+    tracing::info!(user_id = %user_id, count = groups_len, "Selección de asignaturas guardada");
     Ok(UserSelectionResponse {
         message: "Selección guardada".to_string(),
         count: groups_len,
@@ -72,6 +75,7 @@ pub async fn auto_select_subjects(
     let uo_username = user_email.split('@').next().unwrap_or("");
 
     if !is_uo_username(uo_username) {
+        tracing::warn!(user_id = %user_id, username = %uo_username, "Formato de usuario UO inválido para auto-select");
         return Err(AppError::BadRequest(
             "El nombre de usuario debe tener el formato 'uo' seguido de entre 4 y 6 dígitos (ej. uo123456)"
                 .to_string(),
@@ -80,6 +84,7 @@ pub async fn auto_select_subjects(
 
     // Verificar que no haya ya un job activo para este usuario
     if repo.get_active_job_for_user(user_id).await?.is_some() {
+        tracing::warn!(user_id = %user_id, "Ya hay un job de auto-select activo para este usuario");
         return Err(AppError::Conflict(
             "Ya hay un proceso de auto-selección en curso para este usuario".to_string(),
         ));
@@ -88,10 +93,14 @@ pub async fn auto_select_subjects(
     // Limitar el número de procesos simultáneos a nivel global
     let permit = match semaphore.try_acquire_owned() {
         Ok(p) => p,
-        Err(_) => return Err(AppError::TooManyRequests),
+        Err(_) => {
+            tracing::warn!(user_id = %user_id, "Semáforo de auto-select lleno, rechazando petición");
+            return Err(AppError::TooManyRequests);
+        }
     };
 
     let job_id = repo.create_auto_select_job(user_id).await?;
+    tracing::info!(user_id = %user_id, job_id = %job_id, "Job de auto-select iniciado");
 
     let repo_clone = repo.clone();
     let full_url = format!("{scraper_url}/auto-select/{uo_username}");
@@ -152,6 +161,7 @@ pub async fn auto_select_subjects_status(
         "completed" => AutoSelectStatus::Completed,
         "failed" => AutoSelectStatus::Failed,
         other => {
+            tracing::error!(job_id = %job_id, status = %other, "Estado desconocido en auto_select_jobs");
             return Err(AppError::Internal(anyhow::anyhow!(
                 "Estado desconocido en auto_select_jobs: {other}"
             )));
@@ -164,6 +174,25 @@ pub async fn auto_select_subjects_status(
         groups_selected,
         error,
     })
+}
+
+pub async fn get_all_subjects_catalog(
+    repo: &dyn SubjectRepository,
+) -> Result<Vec<String>, AppError> {
+    let rows = repo.get_all_subjects_catalog().await?;
+
+    Ok(rows)
+}
+
+pub async fn get_all_groups_per_subject(
+    repo: &dyn SubjectRepository,
+    subject: &str,
+) -> Result<Vec<GroupEntryWithoutSelection>, AppError> {
+    let groups = repo.get_all_groups_per_subject(subject).await?;
+    if groups.is_empty() {
+        return Err(AppError::NotFound);
+    }
+    Ok(groups)
 }
 
 fn is_uo_username(username: &str) -> bool {
@@ -188,16 +217,18 @@ async fn fetch_groups_for_uo(url: &str) -> Result<Vec<(String, String)>, AppErro
         .map_err(|e| AppError::Internal(e.into()))?;
 
     let response = client.post(url).send().await.map_err(|e| {
+        tracing::error!(url, error = ?e, "No se pudo conectar al scraper de auto-select");
         AppError::Internal(anyhow::anyhow!(
             "No se pudo conectar al scraper de auto-select en {url}: {e}"
         ))
     })?;
 
     if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!(url, status = %status, body = %body, "El scraper de auto-select respondió con error HTTP");
         return Err(AppError::Internal(anyhow::anyhow!(
-            "El scraper de auto-select respondió con error HTTP {}: {}",
-            response.status(),
-            response.text().await.unwrap_or_default()
+            "El scraper de auto-select respondió con error HTTP {status}: {body}"
         )));
     }
 

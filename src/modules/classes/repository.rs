@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::AppError,
-    modules::classes::models::{Session, SessionSource},
+    modules::classes::models::{ClassItemRow, ListSessionsParams, Session, SessionSource},
 };
 
 #[async_trait::async_trait]
@@ -92,6 +92,21 @@ pub trait ClassRepository: Send + Sync {
         grp: &str,
         starts_at: DateTime<Utc>,
     ) -> Result<Option<Uuid>, AppError>;
+
+    /// Devuelve una página de sesiones con filtros opcionales y el total de resultados sin paginar
+    ///
+    /// # Errores
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
+    async fn list_sessions(
+        &self,
+        params: ListSessionsParams<'_>,
+    ) -> Result<(Vec<ClassItemRow>, i64), AppError>;
+
+    /// Busca el subject y grp de un subject_group por su UUID.
+    async fn find_subject_group_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<(String, String)>, AppError>;
 }
 
 pub struct PgClassRepository {
@@ -273,5 +288,55 @@ impl ClassRepository for PgClassRepository {
         .await?;
 
         Ok(id)
+    }
+
+    async fn find_subject_group_by_id(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<(String, String)>, AppError> {
+        let row = sqlx::query!("SELECT subject, grp FROM subject_groups WHERE id = $1", id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|r| (r.subject, r.grp)))
+    }
+
+    async fn list_sessions(
+        &self,
+        params: ListSessionsParams<'_>,
+    ) -> Result<(Vec<ClassItemRow>, i64), AppError> {
+        let sql = format!(
+            r#"
+            SELECT
+                id,
+                subject,
+                grp,
+                classroom,
+                starts_at,
+                duration_min,
+                COUNT(*) OVER() AS total
+            FROM sessions
+            WHERE
+                ($1::text IS NULL OR subject ILIKE '%' || $1 || '%')
+                AND ($2::timestamptz IS NULL OR starts_at >= $2)
+                AND ($3::timestamptz IS NULL OR starts_at < $3)
+            ORDER BY {order_col} {order_dir}
+            LIMIT $4 OFFSET $5
+            "#,
+            order_col = params.order_col,
+            order_dir = params.order_dir,
+        );
+
+        let rows = sqlx::query_as::<_, ClassItemRow>(&sql)
+            .bind(params.search)
+            .bind(params.week_start)
+            .bind(params.week_end)
+            .bind(params.limit)
+            .bind(params.offset)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let total = rows.first().map(|r| r.total).unwrap_or(0);
+        Ok((rows, total))
     }
 }

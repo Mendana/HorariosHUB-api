@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO sessions (subject, grp, starts_at, duration_min, classroom, source, is_overridden)\n        VALUES ($1, $2, $3, $4, $5, 'scraper', false)\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "edb6dfd5bb86b3b39c1bfc3d124aba9e634adcf3962be1216b1fa3d53d461bd4"
+}

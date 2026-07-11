@@ -1,4 +1,7 @@
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use reqwest::StatusCode;
 
 use crate::{
@@ -8,8 +11,9 @@ use crate::{
         auth::middleware::AuthenticatedUser,
         subjects::{
             models::{
-                AutoSelectResponse, AutoSelectStatusResponse, CatalogResponse,
-                UserSelectionRequest, UserSelectionResponse,
+                AllGroupsPerSubjectResponse, AllSubjectsResponse, AutoSelectResponse,
+                AutoSelectStatusResponse, CatalogResponse, UserSelectionRequest,
+                UserSelectionResponse,
             },
             service,
         },
@@ -17,7 +21,7 @@ use crate::{
 };
 
 /// GET /subjects/catalog
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn get_catalog_by_user(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -28,7 +32,7 @@ pub async fn get_catalog_by_user(
 }
 
 /// POST /subjects/selection
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn set_user_selection_destructive(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -44,7 +48,7 @@ pub async fn set_user_selection_destructive(
     Ok(Json(response))
 }
 
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn auto_select_subjects(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -61,7 +65,7 @@ pub async fn auto_select_subjects(
     Ok((StatusCode::ACCEPTED, Json(response)))
 }
 
-#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.user.id, user_email = %user.user.email))]
 pub async fn get_auto_selection_status(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -70,4 +74,30 @@ pub async fn get_auto_selection_status(
         service::auto_select_subjects_status(state.subjects_repo.as_ref(), user.user.id).await?;
 
     Ok((StatusCode::OK, Json(response)))
+}
+
+#[tracing::instrument(skip(state))]
+pub async fn get_all_subjects_catalog(
+    State(state): State<AppState>,
+) -> ApiResult<(StatusCode, Json<AllSubjectsResponse>)> {
+    let response = service::get_all_subjects_catalog(state.subjects_repo.as_ref()).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(AllSubjectsResponse { subjects: response }),
+    ))
+}
+
+#[tracing::instrument(skip(state), fields(subject = %subject))]
+pub async fn get_all_groups_per_subject(
+    State(state): State<AppState>,
+    Path(subject): Path<String>,
+) -> ApiResult<(StatusCode, Json<AllGroupsPerSubjectResponse>)> {
+    let response =
+        service::get_all_groups_per_subject(state.subjects_repo.as_ref(), &subject).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(AllGroupsPerSubjectResponse { groups: response }),
+    ))
 }
