@@ -3,6 +3,7 @@ pub mod config;
 pub mod db;
 pub mod errors;
 pub mod jwt;
+pub mod metrics;
 pub mod modules;
 pub mod seed;
 pub mod services;
@@ -92,6 +93,9 @@ pub async fn run() -> anyhow::Result<()> {
 
     let auto_select_semaphore = Arc::new(Semaphore::new(config.auto_select_max_concurrent));
 
+    // 6.5 Levantamos prometheus
+    let prometheus_handle = metrics::setup_recorder();
+
     // 7. Estado
     let state = AppState {
         health_repo: Arc::new(PgHealthRepository::new(pool.clone())),
@@ -126,21 +130,30 @@ pub async fn run() -> anyhow::Result<()> {
 
     let app = Router::new()
         .merge(modules::routes(true))
+        .layer(axum::middleware::from_fn(metrics::track_http_metrics))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(cors)
         .with_state(state);
 
+    // 9.5 Anidamos el prometheus a un router interno
+    let metrics_app = metrics::metrics_router(prometheus_handle);
+
     // 10. Servidor
     let addr = format!("0.0.0.0:{}", config.server_port);
+    let metrics_addr = format!("0.0.0.0:{}", config.metrics_port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Servidor escuchando en {}", addr);
+    let metrics_listener = tokio::net::TcpListener::bind(&metrics_addr).await?;
+    tracing::info!("Métricas (interno) escuchando en {}", metrics_addr);
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    tokio::try_join!(
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>()
+        ),
+        axum::serve(metrics_listener, metrics_app),
+    )?;
     Ok(())
 }
 
@@ -240,6 +253,7 @@ pub async fn create_test_app_with_scraper(
             scraper_min_sessions: 1000,
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
+            metrics_port: 9090,
         }),
         auto_select_semaphore: Arc::new(Semaphore::new(5)),
     };
