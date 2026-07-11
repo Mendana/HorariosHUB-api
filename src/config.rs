@@ -18,6 +18,7 @@ pub struct Config {
     pub scraper_min_sessions: usize,
     pub auto_select_max_concurrent: usize,
     pub allowed_origin: String,
+    pub metrics_port: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,6 +64,9 @@ impl Config {
                 .parse()?,
             allowed_origin: env::var("ALLOWED_ORIGIN")
                 .unwrap_or_else(|_| "http://localhost:3000".into()),
+            metrics_port: env::var("METRICS_PORT")
+                .unwrap_or_else(|_| "9090".into())
+                .parse()?,
         })
     }
 
