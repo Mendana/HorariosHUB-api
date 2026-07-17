@@ -3,6 +3,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use std::sync::{Mutex, OnceLock};
 use testcontainers::ContainerAsync;
+use testcontainers::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
 use tokio::sync::OnceCell;
@@ -20,6 +21,7 @@ async fn get_postgres_port() -> u16 {
     *POSTGRES_PORT
         .get_or_init(|| async {
             let container = Postgres::default()
+                .with_tag("16-alpine")
                 .start()
                 .await
                 .expect("No se pudo levantar el contenedor de Postgres");
