@@ -5,6 +5,7 @@ pub mod proposals;
 pub mod schedule;
 pub mod scraper;
 pub mod subjects;
+pub mod user_metrics;
 pub mod users;
 
 use crate::AppState;
@@ -20,4 +21,5 @@ pub fn routes(with_rate_limit: bool) -> Router<AppState> {
         .merge(scraper::routes())
         .merge(users::routes())
         .merge(health::routes())
+        .merge(user_metrics::routes())
 }

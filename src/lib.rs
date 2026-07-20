@@ -26,6 +26,7 @@ use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleReposit
 use crate::modules::scraper::repository::{PgScraperRepository, ScraperRepository};
 use crate::modules::scraper::service::run_sync;
 use crate::modules::subjects::repository::{PgSubjectRepository, SubjectRepository};
+use crate::modules::user_metrics::repository::{PgUserMetricsRepository, UserMetricsRepository};
 use crate::modules::users::repository::{PgUserRepository, UserRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
@@ -40,6 +41,7 @@ pub struct AppState {
     pub proposals_repo: Arc<dyn ProposalRepository>,
     pub subjects_repo: Arc<dyn SubjectRepository>,
     pub scraper_repo: Arc<dyn ScraperRepository>,
+    pub user_metrics_repo: Arc<dyn UserMetricsRepository>,
     pub email: Arc<dyn EmailService>,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
@@ -105,6 +107,7 @@ pub async fn run() -> anyhow::Result<()> {
         schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
         subjects_repo: Arc::new(PgSubjectRepository::new(pool.clone())),
         scraper_repo: Arc::new(PgScraperRepository::new(pool.clone())),
+        user_metrics_repo: Arc::new(PgUserMetricsRepository::new(pool.clone())),
         pool: Arc::new(pool),
         email,
         cache,
@@ -226,6 +229,7 @@ pub async fn create_test_app_with_scraper(
     let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
     let subject_repo = Arc::new(PgSubjectRepository::new((*pool).clone()));
     let scraper_repo = Arc::new(PgScraperRepository::new((*pool).clone()));
+    let user_metrics_repo = Arc::new(PgUserMetricsRepository::new((*pool).clone()));
     let state = AppState {
         pool: pool.clone(),
         health_repo: Arc::new(PgHealthRepository::new((*pool).clone())),
@@ -235,6 +239,7 @@ pub async fn create_test_app_with_scraper(
         schedule_repo,
         subjects_repo: subject_repo,
         scraper_repo,
+        user_metrics_repo,
         email: Arc::new(MockEmailService),
         cache: Arc::new(cache::MokaCache::new(100, 60)),
         config: Arc::new(config::Config {
