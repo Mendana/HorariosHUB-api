@@ -8,7 +8,7 @@ use crate::{
     modules::user_metrics::{
         models::{
             GetUserMetricsResponse, SemesterBreakdown, SemesterSummary, SessionType, SubjectStat,
-            TypeStat, UserSessionRow, WeekExtreme, WeekdayStat,
+            TypeStat, UserSessionRow, WeekExtreme, WeekdayStat, WeeklyEvolutionEntry,
         },
         repository::UserMetricsRepository,
     },
@@ -69,6 +69,75 @@ pub async fn get_user_metrics(
         remaining_classes,
         semesters,
     })
+}
+
+/// Serie semanal (para gráfica de evolución) entre la primera y la última semana con datos
+/// dentro del filtro pedido. Las semanas intermedias sin clase se rellenan a cero; si no hay
+/// ninguna sesión en el filtro, no hay rango que anclar y se devuelve un array vacío.
+pub async fn get_weekly_evolution(
+    metrics_repo: &dyn UserMetricsRepository,
+    user_id: Uuid,
+    semester: Option<u8>,
+) -> Result<Vec<WeeklyEvolutionEntry>, AppError> {
+    let semester = validate_semester(semester)?;
+
+    let rows = metrics_repo.fetch_all_user_rows(&user_id).await?;
+
+    let filtered_rows: Vec<&UserSessionRow> = match semester {
+        Some(s) => rows
+            .iter()
+            .filter(|row| classify_session_semester(row.starts_at) == Some(s))
+            .collect(),
+        None => rows.iter().collect(),
+    };
+
+    if filtered_rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let now = Utc::now();
+    // (horas, nº de clases, nº de clases ya completadas)
+    let mut per_week: BTreeMap<(i32, u32), (f64, i64, i64)> = BTreeMap::new();
+    for row in &filtered_rows {
+        let iso = row.starts_at.iso_week();
+        let entry = per_week
+            .entry((iso.year(), iso.week()))
+            .or_insert((0.0, 0, 0));
+        entry.0 += row.duration_min as f64 / 60.0;
+        entry.1 += 1;
+        if session_end(row) <= now {
+            entry.2 += 1;
+        }
+    }
+
+    let (first_year, first_week) = *per_week.keys().next().expect("per_week no está vacío");
+    let (last_year, last_week) = *per_week.keys().next_back().expect("per_week no está vacío");
+    let last_week_start = week_bounds(last_year, last_week).0;
+
+    let mut entries = Vec::new();
+    let mut cursor = week_bounds(first_year, first_week).0;
+    while cursor <= last_week_start {
+        let iso = cursor.iso_week();
+        let key = (iso.year(), iso.week());
+        let (total_hours, class_count, completed_classes) =
+            per_week.get(&key).copied().unwrap_or((0.0, 0, 0));
+        let (week_start, week_end) = week_bounds(key.0, key.1);
+
+        entries.push(WeeklyEvolutionEntry {
+            iso_year: key.0,
+            iso_week: key.1,
+            week_start,
+            week_end,
+            total_hours,
+            class_count,
+            completed_classes,
+            remaining_classes: class_count - completed_classes,
+        });
+
+        cursor += Duration::days(7);
+    }
+
+    Ok(entries)
 }
 
 fn validate_semester(semester: Option<u8>) -> Result<Option<u8>, AppError> {
@@ -473,5 +542,91 @@ mod tests {
         let semesters = response.semesters.unwrap();
         assert_eq!(semesters.semester_1.total_hours, 1.0);
         assert_eq!(semesters.semester_2.total_hours, 2.0);
+    }
+
+    #[tokio::test]
+    async fn evolucion_semanal_sin_sesiones_en_el_filtro_devuelve_vacio() {
+        let repo = MockUserMetricsRepository { rows: vec![] };
+        let entries = get_weekly_evolution(&repo, Uuid::new_v4(), None)
+            .await
+            .unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn evolucion_semanal_rellena_huecos_con_ceros_y_va_ordenada() {
+        let repo = MockUserMetricsRepository {
+            rows: vec![
+                row("MAT", "T.1", dt(2026, 9, 7, 9, 0), 60), // semana ISO 37
+                row("MAT", "T.1", dt(2026, 9, 28, 9, 0), 120), // semana ISO 40
+            ],
+        };
+        let entries = get_weekly_evolution(&repo, Uuid::new_v4(), None)
+            .await
+            .unwrap();
+
+        // 37, 38, 39, 40 -> 4 semanas, sin saltarse ninguna
+        assert_eq!(entries.len(), 4);
+        let weeks: Vec<u32> = entries.iter().map(|e| e.iso_week).collect();
+        assert_eq!(weeks, vec![37, 38, 39, 40]);
+
+        assert_eq!(entries[0].total_hours, 1.0);
+        assert_eq!(entries[0].class_count, 1);
+        // Semanas intermedias sin clase: todo a cero, no desaparecen.
+        assert_eq!(entries[1].total_hours, 0.0);
+        assert_eq!(entries[1].class_count, 0);
+        assert_eq!(entries[1].completed_classes, 0);
+        assert_eq!(entries[1].remaining_classes, 0);
+        assert_eq!(entries[2].total_hours, 0.0);
+
+        assert_eq!(entries[3].total_hours, 2.0);
+        assert_eq!(entries[3].class_count, 1);
+    }
+
+    #[tokio::test]
+    async fn evolucion_semanal_completadas_vs_pendientes_por_semana() {
+        let now = Utc::now();
+        let repo = MockUserMetricsRepository {
+            rows: vec![
+                row("MAT", "T.1", now - Duration::days(21), 60),
+                row(
+                    "MAT",
+                    "T.1",
+                    now - Duration::days(21) + Duration::hours(2),
+                    60,
+                ),
+                row("MAT", "T.1", now + Duration::days(21), 60),
+            ],
+        };
+        let entries = get_weekly_evolution(&repo, Uuid::new_v4(), None)
+            .await
+            .unwrap();
+
+        let past_week = &entries[0];
+        assert_eq!(past_week.class_count, 2);
+        assert_eq!(past_week.completed_classes, 2);
+        assert_eq!(past_week.remaining_classes, 0);
+
+        let future_week = entries.last().unwrap();
+        assert_eq!(future_week.class_count, 1);
+        assert_eq!(future_week.completed_classes, 0);
+        assert_eq!(future_week.remaining_classes, 1);
+    }
+
+    #[tokio::test]
+    async fn evolucion_semanal_filtra_por_semester() {
+        let repo = MockUserMetricsRepository {
+            rows: vec![
+                row("MAT", "T.1", dt(2026, 9, 7, 9, 0), 60), // semestre 1
+                row("FIS", "PL.1", dt(2026, 2, 2, 9, 0), 120), // semestre 2
+            ],
+        };
+        let entries = get_weekly_evolution(&repo, Uuid::new_v4(), Some(1))
+            .await
+            .unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].iso_week, 37);
+        assert_eq!(entries[0].total_hours, 1.0);
     }
 }

@@ -83,3 +83,15 @@ pub enum SessionType {
     Tutoria,
     Otros,
 }
+
+#[derive(Debug, Serialize)]
+pub struct WeeklyEvolutionEntry {
+    pub iso_year: i32,
+    pub iso_week: u32,
+    pub week_start: NaiveDate,
+    pub week_end: NaiveDate,
+    pub total_hours: f64,
+    pub class_count: i64,
+    pub completed_classes: i64,
+    pub remaining_classes: i64,
+}
