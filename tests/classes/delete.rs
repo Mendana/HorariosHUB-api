@@ -186,3 +186,42 @@ async fn delete_classes_registra_change_aprobado() {
     assert_eq!(row.prev_duration, Some(90));
     assert_eq!(row.prev_classroom.as_deref(), Some("Aula 1"));
 }
+
+#[tokio::test]
+async fn delete_classes_notifica_a_suscriptores() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof8@uniovi.es", "professor").await;
+    let id = create_session(&ctx, &token).await;
+
+    let _student_token = login_as(&ctx, "stu2@uniovi.es", "student").await;
+    let student_id: uuid::Uuid =
+        sqlx::query_scalar!("SELECT id FROM users WHERE email = $1", "stu2@uniovi.es")
+            .fetch_one(&ctx.pool)
+            .await
+            .unwrap();
+
+    sqlx::query!(
+        "INSERT INTO schedule (user_id, subject, grp) VALUES ($1, 'ALG', 'Teoría')",
+        student_id
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    ctx.server
+        .delete(&format!("/classes/{id}"))
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    let notification = sqlx::query!(
+        r#"SELECT type::text AS notif_type, session_id FROM notifications WHERE user_id = $1"#,
+        student_id
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir una notificación para el suscriptor");
+
+    assert_eq!(notification.notif_type.as_deref(), Some("session_deleted"));
+    // ON DELETE SET NULL también aplica a notifications.session_id
+    assert!(notification.session_id.is_none());
+}

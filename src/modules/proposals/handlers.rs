@@ -35,6 +35,8 @@ pub async fn create_proposal(
     let response = service::create_proposal(
         state.proposals_repo.as_ref(),
         state.class_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
         payload,
         auth.user.id,
     )
@@ -52,6 +54,8 @@ pub async fn approve_proposal(
     let response = service::approve_proposal(
         state.proposals_repo.as_ref(),
         state.class_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
         id,
         professor.id,
     )
@@ -66,7 +70,13 @@ pub async fn reject_proposal(
     ProfessorOrAbove(professor): ProfessorOrAbove,
     Path(id): Path<Uuid>,
 ) -> ApiResult<(StatusCode, Json<RejectProposalResponse>)> {
-    let response = service::reject_proposal(state.proposals_repo.as_ref(), id).await?;
+    let response = service::reject_proposal(
+        state.proposals_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
+        id,
+    )
+    .await?;
 
     Ok((StatusCode::OK, Json(response)))
 }
