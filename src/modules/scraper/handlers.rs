@@ -21,6 +21,8 @@ pub async fn trigger_sync(
 
     let result = service::run_sync(
         state.scraper_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
         &full_scraper_url,
         state.config.scraper_min_sessions,
         "manual-trigger",

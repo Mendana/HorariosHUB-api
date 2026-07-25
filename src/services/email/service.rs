@@ -16,6 +16,12 @@ use crate::services::email::template;
 pub trait EmailService: Send + Sync {
     async fn send_verification_email(&self, to: &str, token: &str) -> Result<(), AppError>;
     async fn send_password_reset_email(&self, to: &str, token: &str) -> Result<(), AppError>;
+    async fn send_notification_email(
+        &self,
+        to: &str,
+        subject: &str,
+        message: &str,
+    ) -> Result<(), AppError>;
 }
 
 pub struct SmtpEmailService {
@@ -32,6 +38,14 @@ impl EmailService for MockEmailService {
         Ok(())
     }
     async fn send_password_reset_email(&self, _to: &str, _token: &str) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn send_notification_email(
+        &self,
+        _to: &str,
+        _subject: &str,
+        _message: &str,
+    ) -> Result<(), AppError> {
         Ok(())
     }
 }
@@ -101,5 +115,15 @@ impl EmailService for SmtpEmailService {
         let html = template::password_reset_email(&url);
         self.send_html(to, "Restablece tu contraseña en HorariosHub", &html)
             .await
+    }
+
+    async fn send_notification_email(
+        &self,
+        to: &str,
+        subject: &str,
+        message: &str,
+    ) -> Result<(), AppError> {
+        let html = template::notification_email(subject, message);
+        self.send_html(to, subject, &html).await
     }
 }

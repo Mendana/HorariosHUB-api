@@ -288,3 +288,97 @@ async fn post_classes_registra_change_aprobado() {
     assert_eq!(row.new_duration, Some(90));
     assert_eq!(row.new_classroom.as_deref(), Some("Aula 1"));
 }
+
+#[tokio::test]
+async fn post_classes_examen_notifica_a_suscriptores() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof9@uniovi.es", "professor").await;
+
+    let _student_token = login_as(&ctx, "stu9@uniovi.es", "student").await;
+    let student_id: uuid::Uuid =
+        sqlx::query_scalar!("SELECT id FROM users WHERE email = $1", "stu9@uniovi.es")
+            .fetch_one(&ctx.pool)
+            .await
+            .unwrap();
+
+    sqlx::query!(
+        "INSERT INTO subject_groups (subject, grp) VALUES ('MAT', 'Examen') ON CONFLICT DO NOTHING"
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO schedule (user_id, subject, grp) VALUES ($1, 'MAT', 'Examen')",
+        student_id
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .post("/classes")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .json(&json!({
+            "subject": "MAT",
+            "subjectType": "Examen",
+            "startTime": "2025-10-01T09:00:00Z",
+            "endTime":   "2025-10-01T11:00:00Z"
+        }))
+        .await;
+
+    response.assert_status(StatusCode::CREATED);
+
+    let notification = sqlx::query!(
+        r#"SELECT type::text AS notif_type FROM notifications WHERE user_id = $1"#,
+        student_id
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir una notificación de examen para el suscriptor");
+
+    assert_eq!(notification.notif_type.as_deref(), Some("exam_added"));
+}
+
+#[tokio::test]
+async fn post_classes_sin_ser_examen_no_notifica() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof10@uniovi.es", "professor").await;
+
+    let _student_token = login_as(&ctx, "stu10@uniovi.es", "student").await;
+    let student_id: uuid::Uuid =
+        sqlx::query_scalar!("SELECT id FROM users WHERE email = $1", "stu10@uniovi.es")
+            .fetch_one(&ctx.pool)
+            .await
+            .unwrap();
+
+    sqlx::query!(
+        "INSERT INTO subject_groups (subject, grp) VALUES ('ALG', 'Teoría') ON CONFLICT DO NOTHING"
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO schedule (user_id, subject, grp) VALUES ($1, 'ALG', 'Teoría')",
+        student_id
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    ctx.server
+        .post("/classes")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .json(&base_payload())
+        .await;
+
+    let count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM notifications WHERE user_id = $1",
+        student_id
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+
+    assert_eq!(count, Some(0));
+}

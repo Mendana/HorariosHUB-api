@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.id as user_id,\n                u.email,\n                u.notify_email,\n                u.notify_in_app\n            FROM sessions se\n            JOIN schedule s ON s.subject = se.subject AND s.grp = se.grp\n            JOIN users u ON u.id = s.user_id\n            WHERE se.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "notify_email",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "notify_in_app",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3c7a7cb68fd44e0f1f89fce3a4a188857c4aa9e6ed3aabcee5202839b68a7db8"
+}

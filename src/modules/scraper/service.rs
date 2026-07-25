@@ -3,6 +3,10 @@ use std::time::Duration;
 use crate::{
     errors::AppError,
     modules::{
+        notifications::{
+            models::ScraperConflictInfo, repository::NotificationRepository,
+            service as notifications_service, service::EmailQueue,
+        },
         proposals::models::ChangeType,
         scraper::{
             models::{ApprovedChange, SyncResult},
@@ -57,6 +61,8 @@ pub async fn fetch_csv_from_scraper(scraper_url: &str) -> Result<String, AppErro
 /// 7. Liberar lock
 pub async fn run_sync(
     repo: &dyn ScraperRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     scraper_url: &str,
     min_sessions: usize,
     hostname: &str,
@@ -74,7 +80,7 @@ pub async fn run_sync(
 
     tracing::info!("Lock adquirido, iniciando sincronización");
 
-    let result = run_sync_inner(repo, scraper_url, min_sessions).await;
+    let result = run_sync_inner(repo, notifications_repo, email_queue, scraper_url, min_sessions).await;
 
     if let Err(e) = repo.release_lock().await {
         tracing::error!("No se pudo liberar el lock del scraper: {:?}", e);
@@ -85,6 +91,8 @@ pub async fn run_sync(
 
 async fn run_sync_inner(
     repo: &dyn ScraperRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     scraper_url: &str,
     min_sessions: usize,
 ) -> Result<SyncResult, AppError> {
@@ -136,8 +144,12 @@ async fn run_sync_inner(
     for change in &approved_changes {
         match change.change_type {
             ChangeType::Create => apply_create(repo, change, &mut result).await?,
-            ChangeType::Modify => apply_modify(repo, change, &mut result).await?,
-            ChangeType::Delete => apply_delete(repo, change, &mut result).await?,
+            ChangeType::Modify => {
+                apply_modify(repo, notifications_repo, email_queue, change, &mut result).await?
+            }
+            ChangeType::Delete => {
+                apply_delete(repo, notifications_repo, email_queue, change, &mut result).await?
+            }
         }
     }
 
@@ -216,6 +228,8 @@ async fn apply_create(
 
 async fn apply_modify(
     repo: &dyn ScraperRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     change: &super::models::ApprovedChange,
     result: &mut SyncResult,
 ) -> Result<(), AppError> {
@@ -258,6 +272,18 @@ async fn apply_modify(
                 "Modify ignorado — sesión de referencia no existe en BBDD"
             );
             result.changes_ignored += 1;
+
+            notifications_service::notify_scraper_conflict(
+                notifications_repo,
+                email_queue,
+                ScraperConflictInfo {
+                    subject: subject.to_string(),
+                    grp: grp.to_string(),
+                    prev_starts_at,
+                    reason: "El scraper ya no reporta esta sesión, pero había una propuesta de modificación aprobada pendiente de aplicar sobre ella.".to_string(),
+                },
+            )
+            .await;
         }
     }
 
@@ -266,6 +292,8 @@ async fn apply_modify(
 
 async fn apply_delete(
     repo: &dyn ScraperRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     change: &super::models::ApprovedChange,
     result: &mut SyncResult,
 ) -> Result<(), AppError> {
@@ -301,6 +329,18 @@ async fn apply_delete(
                 "Delete ignorado — sesión de referencia no existe en BBDD"
             );
             result.changes_ignored += 1;
+
+            notifications_service::notify_scraper_conflict(
+                notifications_repo,
+                email_queue,
+                ScraperConflictInfo {
+                    subject: subject.to_string(),
+                    grp: grp.to_string(),
+                    prev_starts_at,
+                    reason: "El scraper ya no reporta esta sesión, pero había una propuesta de eliminación aprobada pendiente de aplicar sobre ella.".to_string(),
+                },
+            )
+            .await;
         }
     }
 

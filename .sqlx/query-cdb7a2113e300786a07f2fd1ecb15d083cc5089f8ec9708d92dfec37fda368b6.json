@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.id as user_id,\n                u.email,\n                u.notify_email,\n                u.notify_in_app\n            FROM users u\n            WHERE u.role = ANY($1::user_role[])\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "notify_email",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "notify_in_app",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "user_role[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "user_role",
+                  "kind": {
+                    "Enum": [
+                      "admin",
+                      "professor",
+                      "student"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cdb7a2113e300786a07f2fd1ecb15d083cc5089f8ec9708d92dfec37fda368b6"
+}

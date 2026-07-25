@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod classes;
 pub mod health;
+pub mod notifications;
 pub mod proposals;
 pub mod schedule;
 pub mod scraper;

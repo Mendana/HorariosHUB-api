@@ -294,3 +294,54 @@ async fn approve_proposal_devuelve_403_si_no_es_professor_or_above() {
 
     response.assert_status(StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn approve_proposal_notifica_al_autor() {
+    let ctx = setup().await;
+
+    let professor_token = login_as(&ctx, "prof_notify_approve@uniovi.es", "professor").await;
+    let professor_id: uuid::Uuid = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE email = $1",
+        "prof_notify_approve@uniovi.es"
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .post("/proposals")
+        .add_header("Authorization", format!("Bearer {professor_token}"))
+        .json(&json!({
+            "changeType": "create",
+            "changes": {
+                "subject": "ALG",
+                "grp": "Teoría",
+                "newStartsAt": "2025-09-15T09:00:00Z",
+                "newDuration": 90,
+                "newClassroom": "Aula 101"
+            }
+        }))
+        .await;
+    response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    let proposal_id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
+
+    ctx.server
+        .patch(&format!("/proposals/{proposal_id}/approve"))
+        .add_header("Authorization", format!("Bearer {professor_token}"))
+        .await
+        .assert_status(StatusCode::OK);
+
+    let notification = sqlx::query!(
+        r#"SELECT type::text AS notif_type, proposal_id FROM notifications
+           WHERE user_id = $1 AND type = 'proposal_approved'"#,
+        professor_id
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir una notificación de propuesta aprobada para el autor");
+
+    assert_eq!(notification.notif_type.as_deref(), Some("proposal_approved"));
+    assert_eq!(notification.proposal_id, Some(proposal_id));
+}
