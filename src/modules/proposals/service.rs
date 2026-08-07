@@ -4,7 +4,10 @@ use crate::{
     errors::AppError,
     modules::{
         classes::repository::ClassRepository,
-        notifications::{repository::NotificationRepository, service as notifications_service, service::EmailQueue},
+        notifications::{
+            repository::NotificationRepository, service as notifications_service,
+            service::EmailQueue,
+        },
         proposals::{
             models::{
                 ApproveProposalResponse, Change, ChangeStatus, ChangeType, ChangeWithAuthor,
@@ -108,7 +111,8 @@ pub async fn create_proposal(
         "Propuesta creada"
     );
 
-    notifications_service::notify_proposal_created(notifications_repo, email_queue, change.id).await;
+    notifications_service::notify_proposal_created(notifications_repo, email_queue, change.id)
+        .await;
 
     Ok(CreateProposalResponse::from(change))
 }

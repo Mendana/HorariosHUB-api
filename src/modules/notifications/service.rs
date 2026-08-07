@@ -6,11 +6,12 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
+    errors::AppError,
     modules::{
         notifications::{
             models::{
-                NewNotification, NotificationType, NotifyRecipient, ScraperConflictInfo,
-                SessionChangeType,
+                GetNotificationsResponse, NewNotification, NotificationType, NotifyRecipient,
+                Pagination, ScraperConflictInfo, SessionChangeType,
             },
             repository::NotificationRepository,
         },
@@ -19,6 +20,34 @@ use crate::{
     services::email::service::EmailService,
 };
 
+const DEFAULT_LIMIT: u32 = 20;
+const MAX_LIMIT: u32 = 50;
+
+pub async fn get_notifications(
+    repo: &dyn NotificationRepository,
+    user_id: Uuid,
+    read: Option<bool>,
+    page: Option<u32>,
+    limit: Option<u32>,
+) -> Result<GetNotificationsResponse, AppError> {
+    let page = page.unwrap_or(1).max(1);
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let offset = (page - 1) * limit;
+
+    let (notifications, total) = repo
+        .get_notifications_by_user_id(user_id, read, offset, limit)
+        .await?;
+
+    Ok(GetNotificationsResponse {
+        data: notifications.into_iter().map(Into::into).collect(),
+        pagination: Pagination {
+            page,
+            limit,
+            total,
+            total_pages: total.div_ceil(limit),
+        },
+    })
+}
 
 pub struct EmailJob {
     pub to: String,
@@ -278,7 +307,10 @@ pub async fn notify_scraper_conflict(
         return;
     }
 
-    let title = format!("Conflicto detectado: {} ({})", conflict.subject, conflict.grp);
+    let title = format!(
+        "Conflicto detectado: {} ({})",
+        conflict.subject, conflict.grp
+    );
 
     persist_and_queue_emails(
         repo,
@@ -337,15 +369,37 @@ mod tests {
             if self.fail_insert {
                 return Err(AppError::Internal(anyhow::anyhow!("insert failed")));
             }
-            self.inserted.lock().unwrap().extend_from_slice(notifications);
+            self.inserted
+                .lock()
+                .unwrap()
+                .extend_from_slice(notifications);
             Ok(())
         }
 
-        async fn find_user_by_id(&self, _user_id: Uuid) -> Result<Option<NotifyRecipient>, AppError> {
+        async fn find_user_by_id(
+            &self,
+            _user_id: Uuid,
+        ) -> Result<Option<NotifyRecipient>, AppError> {
             if self.fail_lookup {
                 return Err(AppError::Internal(anyhow::anyhow!("db error")));
             }
             Ok(self.user_by_id.clone())
+        }
+
+        async fn get_notifications_by_user_id(
+            &self,
+            _user_id: Uuid,
+            _read: Option<bool>,
+            _offset: u32,
+            _limit: u32,
+        ) -> Result<
+            (
+                Vec<crate::modules::notifications::models::Notification>,
+                u32,
+            ),
+            AppError,
+        > {
+            unimplemented!()
         }
     }
 
@@ -383,7 +437,10 @@ mod tests {
         let inserted = repo.inserted.lock().unwrap();
         assert_eq!(inserted.len(), 1);
         assert_eq!(inserted[0].user_id, in_app_only.user_id);
-        assert!(matches!(inserted[0].r#type, NotificationType::SessionModified));
+        assert!(matches!(
+            inserted[0].r#type,
+            NotificationType::SessionModified
+        ));
         drop(inserted);
 
         let job = rx.try_recv().expect("debe haberse encolado un email");
@@ -411,7 +468,10 @@ mod tests {
         .await;
 
         let inserted = repo.inserted.lock().unwrap();
-        assert!(matches!(inserted[0].r#type, NotificationType::SessionDeleted));
+        assert!(matches!(
+            inserted[0].r#type,
+            NotificationType::SessionDeleted
+        ));
     }
 
     #[tokio::test]
@@ -490,7 +550,10 @@ mod tests {
         assert_eq!(inserted.len(), 1);
         assert_eq!(inserted[0].user_id, author_id);
         assert_eq!(inserted[0].proposal_id, Some(proposal_id));
-        assert!(matches!(inserted[0].r#type, NotificationType::ProposalApproved));
+        assert!(matches!(
+            inserted[0].r#type,
+            NotificationType::ProposalApproved
+        ));
         drop(inserted);
         assert!(rx.try_recv().is_ok());
     }
@@ -508,7 +571,10 @@ mod tests {
         notify_proposal_status_changed(&repo, &queue, Uuid::new_v4(), author_id, false).await;
 
         let inserted = repo.inserted.lock().unwrap();
-        assert!(matches!(inserted[0].r#type, NotificationType::ProposalRejected));
+        assert!(matches!(
+            inserted[0].r#type,
+            NotificationType::ProposalRejected
+        ));
     }
 
     #[tokio::test]
@@ -575,7 +641,10 @@ mod tests {
 
         let inserted = repo.inserted.lock().unwrap();
         assert_eq!(inserted.len(), 1);
-        assert!(matches!(inserted[0].r#type, NotificationType::ScrapperConflict));
+        assert!(matches!(
+            inserted[0].r#type,
+            NotificationType::ScrapperConflict
+        ));
         assert!(inserted[0].title.contains("ALG"));
         drop(inserted);
         assert!(rx.try_recv().is_ok());

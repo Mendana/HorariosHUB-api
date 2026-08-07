@@ -333,7 +333,10 @@ async fn reject_proposal_notifica_al_autor() {
     .await
     .expect("Debe existir una notificación de propuesta rechazada para el autor");
 
-    assert_eq!(notification.notif_type.as_deref(), Some("proposal_rejected"));
+    assert_eq!(
+        notification.notif_type.as_deref(),
+        Some("proposal_rejected")
+    );
     assert_eq!(notification.proposal_id, Some(proposal_id));
 }
 

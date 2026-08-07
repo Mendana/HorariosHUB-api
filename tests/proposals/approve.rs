@@ -342,6 +342,9 @@ async fn approve_proposal_notifica_al_autor() {
     .await
     .expect("Debe existir una notificación de propuesta aprobada para el autor");
 
-    assert_eq!(notification.notif_type.as_deref(), Some("proposal_approved"));
+    assert_eq!(
+        notification.notif_type.as_deref(),
+        Some("proposal_approved")
+    );
     assert_eq!(notification.proposal_id, Some(proposal_id));
 }
