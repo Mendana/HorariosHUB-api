@@ -8,8 +8,13 @@ use crate::{
     AppState,
     errors::ApiResult,
     modules::{
-        auth::middleware::{AdminUser, ProfessorOrAbove},
-        users::{models::UsersListResponse, service},
+        auth::middleware::{AdminUser, AuthenticatedUser, ProfessorOrAbove},
+        users::{
+            models::{
+                NotificationPreferences, UpdateNotificationPreferencesRequest, UsersListResponse,
+            },
+            service,
+        },
     },
 };
 
@@ -55,4 +60,30 @@ pub async fn delete_user(
     service::delete_user(state.user_repo.as_ref(), &identifier).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /users/me/notification-preferences
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
+pub async fn get_notification_preferences(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> ApiResult<Json<NotificationPreferences>> {
+    let response =
+        service::get_notification_preferences(state.user_repo.as_ref(), auth.user.id).await?;
+
+    Ok(Json(response))
+}
+
+/// PATCH /users/me/notification-preferences
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
+pub async fn update_notification_preferences(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(payload): Json<UpdateNotificationPreferencesRequest>,
+) -> ApiResult<Json<NotificationPreferences>> {
+    let response =
+        service::update_notification_preferences(state.user_repo.as_ref(), auth.user.id, payload)
+            .await?;
+
+    Ok(Json(response))
 }

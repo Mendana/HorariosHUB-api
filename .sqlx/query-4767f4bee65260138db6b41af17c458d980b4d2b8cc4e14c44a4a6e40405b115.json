@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT notify_in_app, notify_email FROM users WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notify_in_app",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "notify_email",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4767f4bee65260138db6b41af17c458d980b4d2b8cc4e14c44a4a6e40405b115"
+}

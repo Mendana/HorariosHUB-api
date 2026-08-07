@@ -14,6 +14,11 @@ pub fn routes() -> Router<AppState> {
     let routes = Router::new()
         .route("/", get(handlers::get_all_users))
         .route(
+            "/me/notification-preferences",
+            get(handlers::get_notification_preferences)
+                .patch(handlers::update_notification_preferences),
+        )
+        .route(
             "/{identifier}/change/{role}",
             patch(handlers::change_user_role),
         )
