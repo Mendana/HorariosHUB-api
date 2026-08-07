@@ -1,4 +1,7 @@
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, patch},
+};
 
 use crate::AppState;
 
@@ -8,5 +11,10 @@ pub mod repository;
 pub mod service;
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/notifications", get(handlers::get_notifications))
+    Router::new()
+        .route("/notifications", get(handlers::get_notifications))
+        .route(
+            "/notifications/{id}/read",
+            patch(handlers::mark_notification_as_read),
+        )
 }
