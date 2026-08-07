@@ -80,7 +80,14 @@ pub async fn run_sync(
 
     tracing::info!("Lock adquirido, iniciando sincronización");
 
-    let result = run_sync_inner(repo, notifications_repo, email_queue, scraper_url, min_sessions).await;
+    let result = run_sync_inner(
+        repo,
+        notifications_repo,
+        email_queue,
+        scraper_url,
+        min_sessions,
+    )
+    .await;
 
     if let Err(e) = repo.release_lock().await {
         tracing::error!("No se pudo liberar el lock del scraper: {:?}", e);

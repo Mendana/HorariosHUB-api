@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     modules::{
-        notifications::models::{NewNotification, NotificationType, NotifyRecipient},
+        notifications::models::{NewNotification, Notification, NotificationType, NotifyRecipient},
         users::models::UserRole,
     },
 };
@@ -24,6 +24,16 @@ pub trait NotificationRepository: Send + Sync {
     async fn insert_many(&self, notifications: &[NewNotification]) -> Result<(), AppError>;
 
     async fn find_user_by_id(&self, user_id: Uuid) -> Result<Option<NotifyRecipient>, AppError>;
+
+    /// Devuelve las notificaciones del usuario, más recientes primero, junto con el
+    /// total de filas que cumplen el filtro (para paginar).
+    async fn get_notifications_by_user_id(
+        &self,
+        user_id: Uuid,
+        read: Option<bool>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<Notification>, u32), AppError>;
 }
 
 pub struct PgNotificationRepository {
@@ -128,5 +138,56 @@ impl NotificationRepository for PgNotificationRepository {
         .await?;
 
         Ok(recipient)
+    }
+
+    async fn get_notifications_by_user_id(
+        &self,
+        user_id: Uuid,
+        read: Option<bool>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<Notification>, u32), AppError> {
+        let notifications = sqlx::query_as!(
+            Notification,
+            r#"
+            SELECT
+                n.id,
+                n.user_id,
+                n.type as "type: NotificationType",
+                n.title,
+                n.body,
+                n.session_id,
+                n.proposal_id,
+                n.read,
+                n.created_at
+            FROM notifications n
+            WHERE n.user_id = $1
+              AND ($2::boolean IS NULL OR n.read = $2)
+            ORDER BY n.created_at DESC
+            OFFSET $3
+            LIMIT $4
+            "#,
+            user_id,
+            read,
+            offset as i64,
+            limit as i64
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) FROM notifications n
+            WHERE n.user_id = $1
+              AND ($2::boolean IS NULL OR n.read = $2)
+            "#,
+            user_id,
+            read
+        )
+        .fetch_one(&self.pool)
+        .await?
+        .unwrap_or(0) as u32;
+
+        Ok((notifications, total))
     }
 }

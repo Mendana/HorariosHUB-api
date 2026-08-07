@@ -23,4 +23,5 @@ pub fn routes(with_rate_limit: bool) -> Router<AppState> {
         .merge(users::routes())
         .merge(health::routes())
         .merge(user_metrics::routes())
+        .merge(notifications::routes())
 }
