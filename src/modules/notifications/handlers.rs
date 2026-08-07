@@ -1,8 +1,9 @@
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
+use uuid::Uuid;
 
 use crate::{
     AppState,
@@ -10,7 +11,9 @@ use crate::{
     modules::{
         auth::middleware::AuthenticatedUser,
         notifications::{
-            models::{GetNotificationsQuery, GetNotificationsResponse},
+            models::{
+                GetNotificationsQuery, GetNotificationsResponse, MarkNotificationReadResponse,
+            },
             service,
         },
     },
@@ -33,4 +36,18 @@ pub async fn get_notifications(
     .await?;
 
     Ok((StatusCode::OK, Json(response)))
+}
+
+/// PATCH /notifications/{id}/read
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email, notification_id = %id))]
+pub async fn mark_notification_as_read(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<MarkNotificationReadResponse>> {
+    let response =
+        service::mark_notification_as_read(state.notifications_repo.as_ref(), id, auth.user.id)
+            .await?;
+
+    Ok(Json(response))
 }

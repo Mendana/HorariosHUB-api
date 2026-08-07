@@ -10,8 +10,9 @@ use crate::{
     modules::{
         notifications::{
             models::{
-                GetNotificationsResponse, NewNotification, NotificationType, NotifyRecipient,
-                Pagination, ScraperConflictInfo, SessionChangeType,
+                GetNotificationsResponse, MarkNotificationReadResponse, NewNotification,
+                NotificationType, NotifyRecipient, Pagination, ScraperConflictInfo,
+                SessionChangeType,
             },
             repository::NotificationRepository,
         },
@@ -46,6 +47,41 @@ pub async fn get_notifications(
             total,
             total_pages: total.div_ceil(limit),
         },
+    })
+}
+
+/// Marca una notificación como leída.
+///
+/// # Errores
+/// - [`AppError::NotFound`] si la notificación no existe
+/// - [`AppError::Forbidden`] si la notificación pertenece a otro usuario
+pub async fn mark_notification_as_read(
+    repo: &dyn NotificationRepository,
+    notification_id: Uuid,
+    user_id: Uuid,
+) -> Result<MarkNotificationReadResponse, AppError> {
+    let notification = repo
+        .find_by_id(notification_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    if notification.user_id != user_id {
+        tracing::warn!(
+            notification_id = %notification_id,
+            owner_id = %notification.user_id,
+            requester_id = %user_id,
+            "Intento de marcar como leída una notificación de otro usuario"
+        );
+        return Err(AppError::Forbidden);
+    }
+
+    if !notification.read {
+        repo.mark_as_read(notification_id).await?;
+    }
+
+    Ok(MarkNotificationReadResponse {
+        id: notification_id,
+        read: true,
     })
 }
 
@@ -399,6 +435,17 @@ mod tests {
             ),
             AppError,
         > {
+            unimplemented!()
+        }
+
+        async fn find_by_id(
+            &self,
+            _id: Uuid,
+        ) -> Result<Option<crate::modules::notifications::models::Notification>, AppError> {
+            unimplemented!()
+        }
+
+        async fn mark_as_read(&self, _id: Uuid) -> Result<(), AppError> {
             unimplemented!()
         }
     }

@@ -34,6 +34,10 @@ pub trait NotificationRepository: Send + Sync {
         offset: u32,
         limit: u32,
     ) -> Result<(Vec<Notification>, u32), AppError>;
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<Notification>, AppError>;
+
+    async fn mark_as_read(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgNotificationRepository {
@@ -189,5 +193,38 @@ impl NotificationRepository for PgNotificationRepository {
         .unwrap_or(0) as u32;
 
         Ok((notifications, total))
+    }
+
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<Notification>, AppError> {
+        let notification = sqlx::query_as!(
+            Notification,
+            r#"
+            SELECT
+                id,
+                user_id,
+                type as "type: NotificationType",
+                title,
+                body,
+                session_id,
+                proposal_id,
+                read,
+                created_at
+            FROM notifications
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(notification)
+    }
+
+    async fn mark_as_read(&self, id: Uuid) -> Result<(), AppError> {
+        sqlx::query!("UPDATE notifications SET read = true WHERE id = $1", id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

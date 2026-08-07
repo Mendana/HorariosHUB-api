@@ -111,3 +111,10 @@ pub struct GetNotificationsResponse {
     pub data: Vec<NotificationItem>,
     pub pagination: Pagination,
 }
+
+/// Respuesta de `PATCH /notifications/{id}/read`
+#[derive(Debug, Clone, Serialize)]
+pub struct MarkNotificationReadResponse {
+    pub id: Uuid,
+    pub read: bool,
+}
