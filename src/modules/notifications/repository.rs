@@ -38,6 +38,8 @@ pub trait NotificationRepository: Send + Sync {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Notification>, AppError>;
 
     async fn mark_as_read(&self, id: Uuid) -> Result<(), AppError>;
+
+    async fn mark_all_as_read(&self, user_id: Uuid) -> Result<u32, AppError>;
 }
 
 pub struct PgNotificationRepository {
@@ -226,5 +228,16 @@ impl NotificationRepository for PgNotificationRepository {
             .await?;
 
         Ok(())
+    }
+
+    async fn mark_all_as_read(&self, user_id: Uuid) -> Result<u32, AppError> {
+        let result = sqlx::query!(
+            "UPDATE notifications SET read = true WHERE user_id = $1 AND read = false",
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() as u32)
     }
 }

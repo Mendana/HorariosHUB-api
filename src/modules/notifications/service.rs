@@ -10,9 +10,10 @@ use crate::{
     modules::{
         notifications::{
             models::{
-                GetNotificationsResponse, MarkNotificationReadResponse, NewNotification,
-                NotificationType, NotifyRecipient, Pagination, ScraperConflictInfo,
-                SessionChangeType, UnreadNotificationsCountResponse,
+                GetNotificationsResponse, MarkAllNotificationsReadResponse,
+                MarkNotificationReadResponse, NewNotification, NotificationType, NotifyRecipient,
+                Pagination, ScraperConflictInfo, SessionChangeType,
+                UnreadNotificationsCountResponse,
             },
             repository::NotificationRepository,
         },
@@ -95,6 +96,21 @@ pub async fn mark_notification_as_read(
     Ok(MarkNotificationReadResponse {
         id: notification_id,
         read: true,
+    })
+}
+
+///Marca todas las notificaciones de un usuario como leídas.
+///
+/// # Errores
+/// - [`AppError::Internal`] si ocurre un error al actualizar la base de datos
+/// - [`AppError::NotFound`] si el usuario no tiene notificaciones
+pub async fn mark_all_notifications_as_read(
+    repo: &dyn NotificationRepository,
+    user_id: Uuid,
+) -> Result<MarkAllNotificationsReadResponse, AppError> {
+    let updated_count = repo.mark_all_as_read(user_id).await?;
+    Ok(MarkAllNotificationsReadResponse {
+        updated: updated_count,
     })
 }
 
@@ -459,6 +475,10 @@ mod tests {
         }
 
         async fn mark_as_read(&self, _id: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        async fn mark_all_as_read(&self, _user_id: Uuid) -> Result<u32, AppError> {
             unimplemented!()
         }
     }
