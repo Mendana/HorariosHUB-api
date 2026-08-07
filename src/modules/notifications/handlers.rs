@@ -12,8 +12,9 @@ use crate::{
         auth::middleware::AuthenticatedUser,
         notifications::{
             models::{
-                GetNotificationsQuery, GetNotificationsResponse, MarkAllNotificationsReadResponse,
-                MarkNotificationReadResponse, UnreadNotificationsCountResponse,
+                DeleteNotificationResponse, GetNotificationsQuery, GetNotificationsResponse,
+                MarkAllNotificationsReadResponse, MarkNotificationReadResponse,
+                UnreadNotificationsCountResponse,
             },
             service,
         },
@@ -39,7 +40,7 @@ pub async fn get_notifications(
     Ok((StatusCode::OK, Json(response)))
 }
 
-///GET /notifications/unread-count
+/// GET /notifications/unread-count
 #[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
 pub async fn get_unread_notifications_count(
     State(state): State<AppState>,
@@ -76,4 +77,17 @@ pub async fn mark_all_notifications_as_read(
             .await?;
 
     Ok(Json(response))
+}
+
+/// DELETE /notifications/{id}
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email, notification_id = %id))]
+pub async fn delete_notification(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<(StatusCode, Json<DeleteNotificationResponse>)> {
+    let response =
+        service::delete_notification(state.notifications_repo.as_ref(), id, auth.user.id).await?;
+
+    Ok((StatusCode::OK, Json(response)))
 }

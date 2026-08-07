@@ -1,5 +1,7 @@
 mod common;
 
+#[path = "notifications/delete.rs"]
+mod delete;
 #[path = "notifications/get.rs"]
 mod get;
 #[path = "notifications/read.rs"]

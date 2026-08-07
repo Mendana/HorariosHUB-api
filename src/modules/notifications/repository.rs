@@ -40,6 +40,8 @@ pub trait NotificationRepository: Send + Sync {
     async fn mark_as_read(&self, id: Uuid) -> Result<(), AppError>;
 
     async fn mark_all_as_read(&self, user_id: Uuid) -> Result<u32, AppError>;
+
+    async fn delete_by_id(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 pub struct PgNotificationRepository {
@@ -239,5 +241,13 @@ impl NotificationRepository for PgNotificationRepository {
         .await?;
 
         Ok(result.rows_affected() as u32)
+    }
+
+    async fn delete_by_id(&self, id: Uuid) -> Result<(), AppError> {
+        sqlx::query!("DELETE FROM notifications WHERE id = $1", id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

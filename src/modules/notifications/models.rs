@@ -130,3 +130,8 @@ pub struct UnreadNotificationsCountResponse {
 pub struct MarkAllNotificationsReadResponse {
     pub updated: u32,
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeleteNotificationResponse {
+    pub message: String,
+}
