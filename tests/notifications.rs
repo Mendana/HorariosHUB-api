@@ -4,3 +4,5 @@ mod common;
 mod get;
 #[path = "notifications/read.rs"]
 mod read;
+#[path = "notifications/unread_count.rs"]
+mod unread_count;

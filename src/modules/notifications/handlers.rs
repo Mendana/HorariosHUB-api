@@ -13,6 +13,7 @@ use crate::{
         notifications::{
             models::{
                 GetNotificationsQuery, GetNotificationsResponse, MarkNotificationReadResponse,
+                UnreadNotificationsCountResponse,
             },
             service,
         },
@@ -36,6 +37,18 @@ pub async fn get_notifications(
     .await?;
 
     Ok((StatusCode::OK, Json(response)))
+}
+
+///GET /notifications/unread_count
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
+pub async fn get_unread_notifications_count(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> ApiResult<Json<UnreadNotificationsCountResponse>> {
+    let response =
+        service::get_unread_count(state.notifications_repo.as_ref(), auth.user.id).await?;
+
+    Ok(Json(response))
 }
 
 /// PATCH /notifications/{id}/read

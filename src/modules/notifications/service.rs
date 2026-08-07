@@ -12,7 +12,7 @@ use crate::{
             models::{
                 GetNotificationsResponse, MarkNotificationReadResponse, NewNotification,
                 NotificationType, NotifyRecipient, Pagination, ScraperConflictInfo,
-                SessionChangeType,
+                SessionChangeType, UnreadNotificationsCountResponse,
             },
             repository::NotificationRepository,
         },
@@ -47,6 +47,19 @@ pub async fn get_notifications(
             total,
             total_pages: total.div_ceil(limit),
         },
+    })
+}
+
+pub async fn get_unread_count(
+    repo: &dyn NotificationRepository,
+    user_id: Uuid,
+) -> Result<UnreadNotificationsCountResponse, AppError> {
+    let (_, total) = repo
+        .get_notifications_by_user_id(user_id, Some(false), 0, 1)
+        .await?;
+
+    Ok(UnreadNotificationsCountResponse {
+        unread_count: total,
     })
 }
 
