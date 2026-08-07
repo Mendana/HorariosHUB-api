@@ -12,8 +12,8 @@ use crate::{
         auth::middleware::AuthenticatedUser,
         notifications::{
             models::{
-                GetNotificationsQuery, GetNotificationsResponse, MarkNotificationReadResponse,
-                UnreadNotificationsCountResponse,
+                GetNotificationsQuery, GetNotificationsResponse, MarkAllNotificationsReadResponse,
+                MarkNotificationReadResponse, UnreadNotificationsCountResponse,
             },
             service,
         },
@@ -39,7 +39,7 @@ pub async fn get_notifications(
     Ok((StatusCode::OK, Json(response)))
 }
 
-///GET /notifications/unread_count
+///GET /notifications/unread-count
 #[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
 pub async fn get_unread_notifications_count(
     State(state): State<AppState>,
@@ -60,6 +60,19 @@ pub async fn mark_notification_as_read(
 ) -> ApiResult<Json<MarkNotificationReadResponse>> {
     let response =
         service::mark_notification_as_read(state.notifications_repo.as_ref(), id, auth.user.id)
+            .await?;
+
+    Ok(Json(response))
+}
+
+/// PATCH /notifications/read-all
+#[tracing::instrument(skip(state, auth), fields(user_id = %auth.user.id, user_email = %auth.user.email))]
+pub async fn mark_all_notifications_as_read(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> ApiResult<Json<MarkAllNotificationsReadResponse>> {
+    let response =
+        service::mark_all_notifications_as_read(state.notifications_repo.as_ref(), auth.user.id)
             .await?;
 
     Ok(Json(response))

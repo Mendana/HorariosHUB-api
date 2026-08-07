@@ -18,7 +18,11 @@ pub fn routes() -> Router<AppState> {
             patch(handlers::mark_notification_as_read),
         )
         .route(
-            "/notifications/unread_count",
+            "/notifications/unread-count",
             get(handlers::get_unread_notifications_count),
+        )
+        .route(
+            "/notifications/read-all",
+            patch(handlers::mark_all_notifications_as_read),
         )
 }

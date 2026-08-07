@@ -124,3 +124,9 @@ pub struct MarkNotificationReadResponse {
 pub struct UnreadNotificationsCountResponse {
     pub unread_count: u32,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkAllNotificationsReadResponse {
+    pub updated: u32,
+}
