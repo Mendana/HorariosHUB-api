@@ -13,6 +13,22 @@ pub struct UsersListResponse {
     pub users: Vec<UserPublic>,
 }
 
+/// Respuesta de `GET /users/me/notification-preferences` y `PATCH /users/me/notification-preferences`
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPreferences {
+    pub in_app: bool,
+    pub email: bool,
+}
+
+/// Payload del endpoint `PATCH /users/me/notification-preferences`
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateNotificationPreferencesRequest {
+    pub in_app: Option<bool>,
+    pub email: Option<bool>,
+}
+
 // --- Modelos de base de datos ---
 
 /// Modelo de usuario para la base de datos

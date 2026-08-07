@@ -472,6 +472,22 @@ mod tests {
         async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
             Ok(())
         }
+
+        async fn get_notification_preferences(
+            &self,
+            _user_id: Uuid,
+        ) -> Result<Option<(bool, bool)>, AppError> {
+            unimplemented!()
+        }
+
+        async fn update_notification_preferences(
+            &self,
+            _user_id: Uuid,
+            _notify_in_app: bool,
+            _notify_email: bool,
+        ) -> Result<(), AppError> {
+            unimplemented!()
+        }
     }
 
     fn mock_email() -> MockEmailService {
@@ -661,6 +677,22 @@ mod tests {
 
         async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
             Ok(())
+        }
+
+        async fn get_notification_preferences(
+            &self,
+            _user_id: Uuid,
+        ) -> Result<Option<(bool, bool)>, AppError> {
+            unimplemented!()
+        }
+
+        async fn update_notification_preferences(
+            &self,
+            _user_id: Uuid,
+            _notify_in_app: bool,
+            _notify_email: bool,
+        ) -> Result<(), AppError> {
+            unimplemented!()
         }
     }
 
@@ -900,6 +932,22 @@ mod tests {
             async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
             }
+
+            async fn get_notification_preferences(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<Option<(bool, bool)>, AppError> {
+                unimplemented!()
+            }
+
+            async fn update_notification_preferences(
+                &self,
+                _user_id: Uuid,
+                _notify_in_app: bool,
+                _notify_email: bool,
+            ) -> Result<(), AppError> {
+                unimplemented!()
+            }
         }
 
         let repo = MockUserRepositoryExpired;
@@ -996,6 +1044,22 @@ mod tests {
 
             async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
+            }
+
+            async fn get_notification_preferences(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<Option<(bool, bool)>, AppError> {
+                unimplemented!()
+            }
+
+            async fn update_notification_preferences(
+                &self,
+                _user_id: Uuid,
+                _notify_in_app: bool,
+                _notify_email: bool,
+            ) -> Result<(), AppError> {
+                unimplemented!()
             }
         }
 
@@ -1116,6 +1180,22 @@ mod tests {
 
             async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
+            }
+
+            async fn get_notification_preferences(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<Option<(bool, bool)>, AppError> {
+                unimplemented!()
+            }
+
+            async fn update_notification_preferences(
+                &self,
+                _user_id: Uuid,
+                _notify_in_app: bool,
+                _notify_email: bool,
+            ) -> Result<(), AppError> {
+                unimplemented!()
             }
         }
 
@@ -1309,6 +1389,22 @@ mod tests {
 
             async fn delete_user(&self, _user_id: Uuid) -> Result<(), AppError> {
                 Ok(())
+            }
+
+            async fn get_notification_preferences(
+                &self,
+                _user_id: Uuid,
+            ) -> Result<Option<(bool, bool)>, AppError> {
+                unimplemented!()
+            }
+
+            async fn update_notification_preferences(
+                &self,
+                _user_id: Uuid,
+                _notify_in_app: bool,
+                _notify_email: bool,
+            ) -> Result<(), AppError> {
+                unimplemented!()
             }
         }
 

@@ -126,6 +126,28 @@ pub trait UserRepository: Send + Sync {
     /// - [`AppError::Internal`] para errores en la eliminación en la base de datos
     /// - [`AppError::NotFound`] si no existe un usuario con el identificador dado
     async fn delete_user(&self, identifier: Uuid) -> Result<(), AppError>;
+
+    /// Devuelve las preferencias de notificación (`notify_in_app`, `notify_email`) del usuario dado
+    ///
+    /// Devuelve `None` si no existe
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la consulta a la base de datos
+    async fn get_notification_preferences(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<(bool, bool)>, AppError>;
+
+    /// Actualiza las preferencias de notificación del usuario dado
+    ///
+    /// # Errores:
+    /// - [`AppError::Internal`] para errores en la actualización en la base de datos
+    async fn update_notification_preferences(
+        &self,
+        user_id: Uuid,
+        notify_in_app: bool,
+        notify_email: bool,
+    ) -> Result<(), AppError>;
 }
 
 pub struct PgUserRepository {
@@ -386,6 +408,38 @@ impl UserRepository for PgUserRepository {
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound);
         }
+
+        Ok(())
+    }
+
+    async fn get_notification_preferences(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<(bool, bool)>, AppError> {
+        let row = sqlx::query!(
+            "SELECT notify_in_app, notify_email FROM users WHERE id = $1",
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| (r.notify_in_app, r.notify_email)))
+    }
+
+    async fn update_notification_preferences(
+        &self,
+        user_id: Uuid,
+        notify_in_app: bool,
+        notify_email: bool,
+    ) -> Result<(), AppError> {
+        sqlx::query!(
+            "UPDATE users SET notify_in_app = $2, notify_email = $3 WHERE id = $1",
+            user_id,
+            notify_in_app,
+            notify_email
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
