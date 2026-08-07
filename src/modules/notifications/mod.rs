@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, patch},
+    routing::{delete, get, patch},
 };
 
 use crate::AppState;
@@ -25,4 +25,5 @@ pub fn routes() -> Router<AppState> {
             "/notifications/read-all",
             patch(handlers::mark_all_notifications_as_read),
         )
+        .route("/notifications/{id}", delete(handlers::delete_notification))
 }

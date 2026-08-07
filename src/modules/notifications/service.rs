@@ -10,10 +10,10 @@ use crate::{
     modules::{
         notifications::{
             models::{
-                GetNotificationsResponse, MarkAllNotificationsReadResponse,
-                MarkNotificationReadResponse, NewNotification, NotificationType, NotifyRecipient,
-                Pagination, ScraperConflictInfo, SessionChangeType,
-                UnreadNotificationsCountResponse,
+                DeleteNotificationResponse, GetNotificationsResponse,
+                MarkAllNotificationsReadResponse, MarkNotificationReadResponse, NewNotification,
+                NotificationType, NotifyRecipient, Pagination, ScraperConflictInfo,
+                SessionChangeType, UnreadNotificationsCountResponse,
             },
             repository::NotificationRepository,
         },
@@ -74,10 +74,12 @@ pub async fn mark_notification_as_read(
     notification_id: Uuid,
     user_id: Uuid,
 ) -> Result<MarkNotificationReadResponse, AppError> {
-    let notification = repo
-        .find_by_id(notification_id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    tracing::debug!(notification_id = %notification_id, "Marcando notificación como leída");
+
+    let notification = repo.find_by_id(notification_id).await?.ok_or_else(|| {
+        tracing::warn!(notification_id = %notification_id, "Notificación no encontrada");
+        AppError::NotFound
+    })?;
 
     if notification.user_id != user_id {
         tracing::warn!(
@@ -90,8 +92,13 @@ pub async fn mark_notification_as_read(
     }
 
     if !notification.read {
-        repo.mark_as_read(notification_id).await?;
+        repo.mark_as_read(notification_id).await.map_err(|e| {
+            tracing::error!(?e, notification_id = %notification_id, "Error al marcar la notificación como leída");
+            e
+        })?;
     }
+
+    tracing::info!(notification_id = %notification_id, user_id = %user_id, "Notificación marcada como leída");
 
     Ok(MarkNotificationReadResponse {
         id: notification_id,
@@ -99,18 +106,71 @@ pub async fn mark_notification_as_read(
     })
 }
 
-///Marca todas las notificaciones de un usuario como leídas.
+/// Marca todas las notificaciones pendientes de un usuario como leídas.
 ///
 /// # Errores
 /// - [`AppError::Internal`] si ocurre un error al actualizar la base de datos
-/// - [`AppError::NotFound`] si el usuario no tiene notificaciones
 pub async fn mark_all_notifications_as_read(
     repo: &dyn NotificationRepository,
     user_id: Uuid,
 ) -> Result<MarkAllNotificationsReadResponse, AppError> {
-    let updated_count = repo.mark_all_as_read(user_id).await?;
+    tracing::debug!(user_id = %user_id, "Marcando todas las notificaciones como leídas");
+
+    let updated_count = repo.mark_all_as_read(user_id).await.map_err(|e| {
+        tracing::error!(?e, user_id = %user_id, "Error al marcar todas las notificaciones como leídas");
+        e
+    })?;
+
+    tracing::info!(
+        user_id = %user_id,
+        updated = updated_count,
+        "Notificaciones marcadas como leídas"
+    );
+
     Ok(MarkAllNotificationsReadResponse {
         updated: updated_count,
+    })
+}
+
+/// Elimina una notificación por su ID.
+///
+/// # Errores
+/// - [`AppError::NotFound`] si la notificación no existe
+/// - [`AppError::Forbidden`] si la notificación pertenece a otro usuario
+pub async fn delete_notification(
+    repo: &dyn NotificationRepository,
+    notification_id: Uuid,
+    user_id: Uuid,
+) -> Result<DeleteNotificationResponse, AppError> {
+    tracing::debug!(notification_id = %notification_id, "Eliminando notificación");
+
+    let notification = repo
+        .find_by_id(notification_id)
+        .await?
+        .ok_or_else(|| {
+            tracing::warn!(notification_id = %notification_id, "Notificación no encontrada para eliminar");
+            AppError::NotFound
+        })?;
+
+    if notification.user_id != user_id {
+        tracing::warn!(
+            notification_id = %notification_id,
+            owner_id = %notification.user_id,
+            requester_id = %user_id,
+            "Intento de eliminar una notificación de otro usuario"
+        );
+        return Err(AppError::Forbidden);
+    }
+
+    repo.delete_by_id(notification_id).await.map_err(|e| {
+        tracing::error!(?e, notification_id = %notification_id, "Error al eliminar la notificación");
+        e
+    })?;
+
+    tracing::info!(notification_id = %notification_id, user_id = %user_id, "Notificación eliminada");
+
+    Ok(DeleteNotificationResponse {
+        message: "Notificación eliminada".to_string(),
     })
 }
 
@@ -181,13 +241,23 @@ async fn persist_and_queue_emails(
         });
     }
 
+    let mut emails_queued = 0;
     for r in recipients.iter().filter(|r| r.notify_email) {
         email_queue.enqueue(EmailJob {
             to: r.email.clone(),
             subject: content.title.to_string(),
             message: content.body.to_string(),
         });
+        emails_queued += 1;
     }
+
+    tracing::debug!(
+        r#type = ?content.r#type,
+        recipients = recipients.len(),
+        in_app = new_notifications.len(),
+        emails_queued,
+        "Notificaciones procesadas"
+    );
 }
 
 pub async fn notify_session_modified(
@@ -479,6 +549,10 @@ mod tests {
         }
 
         async fn mark_all_as_read(&self, _user_id: Uuid) -> Result<u32, AppError> {
+            unimplemented!()
+        }
+
+        async fn delete_by_id(&self, _id: Uuid) -> Result<(), AppError> {
             unimplemented!()
         }
     }
