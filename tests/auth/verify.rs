@@ -56,7 +56,7 @@ async fn get_verify_devuelve_400_con_token_invalido() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let body: serde_json::Value = response.json();
-    assert_eq!(body["error"], "bad_request");
+    assert_eq!(body["error"], "token_invalid");
 }
 
 #[tokio::test]
@@ -117,5 +117,5 @@ async fn get_verify_devuelve_400_si_token_expirado() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let body: serde_json::Value = response.json();
-    assert_eq!(body["error"], "bad_request");
+    assert_eq!(body["error"], "token_expired");
 }

@@ -1,4 +1,4 @@
-use crate::common::setup;
+use crate::common::{setup, verify_user};
 use axum::http::StatusCode;
 use serde_json::json;
 
@@ -10,6 +10,7 @@ async fn post_login_devuelve_200_y_cookie() {
         .post("/auth/register")
         .json(&json!({ "email": "login@uniovi.es", "password": "Password123" }))
         .await;
+    verify_user(&ctx.pool, "login@uniovi.es").await;
 
     let response = ctx
         .server
@@ -63,6 +64,26 @@ async fn post_login_devuelve_401_si_email_no_existe() {
 }
 
 #[tokio::test]
+async fn post_login_devuelve_403_si_email_no_verificado() {
+    let ctx = setup().await;
+
+    ctx.server
+        .post("/auth/register")
+        .json(&json!({ "email": "noverificado@uniovi.es", "password": "Password123" }))
+        .await;
+
+    let response = ctx
+        .server
+        .post("/auth/login")
+        .json(&json!({ "email": "noverificado@uniovi.es", "password": "Password123" }))
+        .await;
+
+    response.assert_status(StatusCode::FORBIDDEN);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["error"], "email_not_verified");
+}
+
+#[tokio::test]
 async fn post_login_normaliza_email_a_minusculas() {
     let ctx = setup().await;
 
@@ -70,6 +91,7 @@ async fn post_login_normaliza_email_a_minusculas() {
         .post("/auth/register")
         .json(&json!({ "email": "case@uniovi.es", "password": "Password123" }))
         .await;
+    verify_user(&ctx.pool, "case@uniovi.es").await;
 
     // Login con el email en mayúsculas debe funcionar
     let response = ctx

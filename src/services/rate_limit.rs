@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use axum::{body::Body, extract::Request, http::header::AUTHORIZATION};
+use axum::{
+    body::Body,
+    extract::Request,
+    http::header::AUTHORIZATION,
+    response::{IntoResponse, Response},
+};
 use governor::middleware::NoOpMiddleware;
 use tower_governor::{
     GovernorError, GovernorLayer,
@@ -8,6 +13,17 @@ use tower_governor::{
     key_extractor::{KeyExtractor, SmartIpKeyExtractor},
 };
 use uuid::Uuid;
+
+use crate::errors::AppError;
+
+/// Traduce los errores de `tower_governor` al mismo formato JSON (`{ "error", "message" }`)
+/// que usa el resto de la API, en vez del texto plano que devuelve la librería por defecto.
+fn rate_limit_error_response(err: GovernorError) -> Response<Body> {
+    match err {
+        GovernorError::TooManyRequests { .. } => AppError::TooManyRequests.into_response(),
+        _ => AppError::Internal(anyhow::anyhow!("Error en el rate limiter: {err}")).into_response(),
+    }
+}
 
 pub fn ip_layer(
     per_second: u64,
@@ -21,7 +37,7 @@ pub fn ip_layer(
             .finish()
             .unwrap(),
     );
-    GovernorLayer::new(config)
+    GovernorLayer::new(config).error_handler(rate_limit_error_response)
 }
 
 #[derive(Clone)]
@@ -68,5 +84,5 @@ pub fn user_layer(
             .finish()
             .unwrap(),
     );
-    GovernorLayer::new(config)
+    GovernorLayer::new(config).error_handler(rate_limit_error_response)
 }

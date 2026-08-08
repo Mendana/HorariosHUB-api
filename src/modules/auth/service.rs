@@ -20,6 +20,8 @@ use crate::services::email::service::EmailService;
 /// 3. Crea el usuario en la base de datos con el rol de `Student` por defecto
 ///
 /// # Errores:
+/// - [`AppError::WeakPassword`] si la contraseña no cumple los requisitos mínimos
+/// - [`AppError::InvalidEmailDomain`] si el email no pertenece al dominio `@uniovi.es`
 /// - [`AppError::Conflict`] si el email ya está registrado
 /// - [`AppError::Internal`] para errores en hashing o inserción en la base de datos
 pub async fn register(
@@ -32,9 +34,7 @@ pub async fn register(
             email = %payload.email,
             "Intento de registro con contraseña débil"
         );
-        return Err(AppError::Validation(
-            "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números".into(),
-        ));
+        return Err(AppError::WeakPassword);
     }
 
     let email = payload.email.trim().to_lowercase();
@@ -44,9 +44,7 @@ pub async fn register(
             email = %email,
             "Intento de registro con email fuera del dominio permitido"
         );
-        return Err(AppError::Validation(
-            "El email debe pertenecer al dominio @uniovi.es".into(),
-        ));
+        return Err(AppError::InvalidEmailDomain);
     }
 
     if repo.find_by_email(&email).await?.is_some() {
@@ -120,7 +118,8 @@ fn password_is_strong(password: &str) -> bool {
 /// 3. Genera un JWT con la información del usuario y el rol
 ///
 /// # Errores:
-/// - [`AppError::Unauthorized`] si el email no existe o la contraseña es incorrecta
+/// - [`AppError::InvalidCredentials`] si el email no existe o la contraseña es incorrecta
+/// - [`AppError::EmailNotVerified`] si las credenciales son correctas pero el email no ha sido verificado
 /// - [`AppError::Internal`] para errores en verificación de contraseña o generación de token
 pub async fn login(
     repo: &dyn UserRepository,
@@ -134,7 +133,7 @@ pub async fn login(
             email = %email,
             "Intento de login con email no registrado"
         );
-        AppError::Unauthorized
+        AppError::InvalidCredentials
     })?;
 
     let password = payload.password.clone();
@@ -163,7 +162,15 @@ pub async fn login(
             email = %email,
             "Intento de login con contraseña incorrecta"
         );
-        return Err(AppError::Unauthorized);
+        return Err(AppError::InvalidCredentials);
+    }
+
+    if !user.verified {
+        tracing::warn!(
+            email = %email,
+            "Intento de login con email no verificado"
+        );
+        return Err(AppError::EmailNotVerified);
     }
 
     let token = jwt::generate_token(
@@ -201,7 +208,8 @@ pub async fn login(
 /// 4. Elimina el token de verificación
 ///
 /// # Errores:
-/// - [`AppError::BadRequest`] si el token es inválido, ya utilizado o ha expirado
+/// - [`AppError::TokenInvalid`] si el token no existe o ya ha sido utilizado
+/// - [`AppError::TokenExpired`] si el token ha expirado
 /// - [`AppError::Internal`] para errores en la base de datos o en la lógica de verificación
 pub async fn verify_email(
     repo: &dyn UserRepository,
@@ -209,7 +217,7 @@ pub async fn verify_email(
 ) -> Result<VerifyEmailResponse, AppError> {
     let verification = repo.find_verification_token(token).await?.ok_or_else(|| {
         tracing::warn!("Intento de verificación con token inválido o ya utilizado");
-        AppError::BadRequest("Token inválido o ya utilizado".into())
+        AppError::TokenInvalid
     })?;
 
     if verification.expires_at < Utc::now() {
@@ -218,7 +226,7 @@ pub async fn verify_email(
             user_id = %verification.user_id,
             "Intento de verificación con token expirado"
         );
-        return Err(AppError::BadRequest("El token ha expirado".into()));
+        return Err(AppError::TokenExpired);
     }
 
     repo.mark_user_as_verified(verification.user_id).await?;
@@ -234,6 +242,11 @@ pub async fn verify_email(
     })
 }
 
+/// # Errores:
+/// - [`AppError::TokenInvalid`] si el token no existe o ya ha sido utilizado
+/// - [`AppError::TokenExpired`] si el token ha expirado
+/// - [`AppError::WeakPassword`] si la nueva contraseña no cumple los requisitos mínimos
+/// - [`AppError::Internal`] para errores en hashing o actualización en la base de datos
 pub async fn reset_password(
     repo: &dyn UserRepository,
     payload: ResetPasswordRequest,
@@ -243,7 +256,7 @@ pub async fn reset_password(
         .await?
         .ok_or_else(|| {
             tracing::warn!("Intento de reseteo de contraseña con token inválido o ya utilizado");
-            AppError::BadRequest("Token inválido o ya utilizado".into())
+            AppError::TokenInvalid
         })?;
 
     if reset_token.expires_at < Utc::now() {
@@ -252,7 +265,7 @@ pub async fn reset_password(
             user_id = %reset_token.user_id,
             "Intento de reseteo de contraseña con token expirado"
         );
-        return Err(AppError::BadRequest("El token ha expirado".into()));
+        return Err(AppError::TokenExpired);
     }
 
     let password = payload.new_password.clone();
@@ -262,9 +275,7 @@ pub async fn reset_password(
             user_id = %reset_token.user_id,
             "Intento de reseteo de contraseña con contraseña débil"
         );
-        return Err(AppError::Validation(
-            "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números".into(),
-        ));
+        return Err(AppError::WeakPassword);
     }
 
     let user_id = reset_token.user_id;
@@ -564,21 +575,37 @@ mod tests {
         };
 
         let result = register(&repo, &mock_email(), no_uppercase_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
 
         let result = register(&repo, &mock_email(), no_lowercase_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
 
         let result = register(&repo, &mock_email(), no_numbers_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
 
         let result = register(&repo, &mock_email(), short_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
+    }
+
+    #[tokio::test]
+    async fn register_falla_si_dominio_no_permitido() {
+        let repo = MockUserRepository {
+            existing_email: None,
+        };
+        let payload = RegisterRequest {
+            email: "diego@gmail.com".to_string(),
+            password: "Password123".to_string(),
+        };
+
+        let result = register(&repo, &mock_email(), payload).await;
+
+        assert!(matches!(result, Err(AppError::InvalidEmailDomain)));
     }
 
     struct MockUserRepositoryLogin {
         existing_email: Option<String>,
         password_hash: String,
+        verified: bool,
     }
 
     #[async_trait]
@@ -594,7 +621,7 @@ mod tests {
                     email: email.to_string(),
                     password_hash: self.password_hash.clone(),
                     role: UserRole::Student,
-                    verified: true,
+                    verified: self.verified,
                 }))
             } else {
                 Ok(None)
@@ -708,6 +735,7 @@ mod tests {
         let repo = MockUserRepositoryLogin {
             existing_email: Some("diego@uniovi.es".to_string()),
             password_hash,
+            verified: true,
         };
         let config = Config {
             database_url: "postgres://localhost/test".to_string(),
@@ -751,6 +779,7 @@ mod tests {
         let repo = MockUserRepositoryLogin {
             existing_email: Some("diego@uniovi.es".to_string()),
             password_hash,
+            verified: true,
         };
         let config = Config {
             database_url: "postgres://localhost/test".to_string(),
@@ -777,7 +806,7 @@ mod tests {
 
         let result = login(&repo, &config, payload).await;
 
-        assert!(matches!(result, Err(AppError::Unauthorized)));
+        assert!(matches!(result, Err(AppError::InvalidCredentials)));
     }
 
     #[tokio::test]
@@ -791,6 +820,7 @@ mod tests {
         let repo = MockUserRepositoryLogin {
             existing_email: Some("diego@uniovi.es".to_string()),
             password_hash,
+            verified: true,
         };
         let config = Config {
             database_url: "postgres://localhost/test".to_string(),
@@ -817,7 +847,48 @@ mod tests {
 
         let result = login(&repo, &config, payload).await;
 
-        assert!(matches!(result, Err(AppError::Unauthorized)));
+        assert!(matches!(result, Err(AppError::InvalidCredentials)));
+    }
+
+    #[tokio::test]
+    async fn login_falla_con_email_no_verificado() {
+        let password_hash =
+            tokio::task::spawn_blocking(|| bcrypt::hash("password123", bcrypt::DEFAULT_COST))
+                .await
+                .unwrap()
+                .unwrap();
+
+        let repo = MockUserRepositoryLogin {
+            existing_email: Some("diego@uniovi.es".to_string()),
+            password_hash,
+            verified: false,
+        };
+        let config = Config {
+            database_url: "postgres://localhost/test".to_string(),
+            jwt_secret: "secret".to_string(),
+            jwt_access_ttl_seconds: 900,
+            server_port: 3001,
+            rust_env: crate::config::Environment::Development,
+            smtp_host: "localhost".to_string(),
+            smtp_port: 1025,
+            smtp_user: "test".to_string(),
+            smtp_password: "test".to_string(),
+            smtp_from: "no-reply@horarioshub.com".to_string(),
+            base_url: "http://localhost:3000".to_string(),
+            scraper_url: "http://localhost:3000/scraper".to_string(),
+            scraper_min_sessions: 100,
+            auto_select_max_concurrent: 5,
+            allowed_origin: "http://localhost:3000".to_string(),
+            metrics_port: 9090,
+        };
+        let payload = LoginRequest {
+            email: "diego@uniovi.es".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let result = login(&repo, &config, payload).await;
+
+        assert!(matches!(result, Err(AppError::EmailNotVerified)));
     }
 
     #[tokio::test]
@@ -953,7 +1024,7 @@ mod tests {
         let repo = MockUserRepositoryExpired;
         let result = verify_email(&repo, "token").await;
 
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(matches!(result, Err(AppError::TokenExpired)));
     }
 
     #[tokio::test]
@@ -1066,7 +1137,7 @@ mod tests {
         let repo = MockUserRepositoryInvalidToken;
         let result = verify_email(&repo, "invalid_token").await;
 
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(matches!(result, Err(AppError::TokenInvalid)));
     }
 
     #[tokio::test]
@@ -1207,7 +1278,7 @@ mod tests {
 
         let result = reset_password(&repo, payload).await;
 
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(matches!(result, Err(AppError::TokenExpired)));
     }
 
     #[tokio::test]
@@ -1234,16 +1305,16 @@ mod tests {
         };
 
         let result = reset_password(&repo, short_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
 
         let result = reset_password(&repo, no_uppercase_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
 
         let result = reset_password(&repo, no_lowercase_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
 
         let result = reset_password(&repo, no_numbers_password).await;
-        assert!(matches!(result, Err(AppError::Validation(_))));
+        assert!(matches!(result, Err(AppError::WeakPassword)));
     }
 
     #[tokio::test]
@@ -1270,6 +1341,7 @@ mod tests {
         let repo = MockUserRepositoryLogin {
             existing_email: Some("diego@uniovi.es".to_string()),
             password_hash,
+            verified: true,
         };
         let config = Config {
             database_url: "postgres://localhost/test".to_string(),
@@ -1416,6 +1488,6 @@ mod tests {
 
         let result = reset_password(&repo, payload).await;
 
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(matches!(result, Err(AppError::TokenInvalid)));
     }
 }

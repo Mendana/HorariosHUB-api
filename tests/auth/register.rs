@@ -1,4 +1,4 @@
-use crate::common::{login_user, setup};
+use crate::common::{login_user, setup, verify_user};
 use axum::http::StatusCode;
 use serde_json::json;
 
@@ -175,6 +175,8 @@ async fn post_register_permite_login_tras_registro() {
         .json(&json!({ "email": "newuser@uniovi.es", "password": "Password123" }))
         .await
         .assert_status(StatusCode::CREATED);
+
+    verify_user(&ctx.pool, "newuser@uniovi.es").await;
 
     let token = login_user(&ctx.server, "newuser@uniovi.es", "Password123").await;
     assert!(!token.is_empty());
