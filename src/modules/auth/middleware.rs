@@ -48,7 +48,7 @@ where
                 user_id = %user_id,
                 "Usuario no verificado"
             );
-            return Err(AppError::Forbidden);
+            return Err(AppError::EmailNotVerified);
         }
 
         tracing::debug!(
