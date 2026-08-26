@@ -20,15 +20,13 @@ workflow:
 
 default:
   image: rust:1.88
-
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - target/
-    - .cargo/
-
-before_script:
-  - rustup component add rustfmt clippy
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - target/
+      - .cargo/
+  before_script:
+    - rustup component add rustfmt clippy
 
 # =========================
 # CHECKS (solo en MR)
@@ -65,14 +63,8 @@ test:
   before_script: []
   tags:
     - docker-dind
-  services:
-    - name: docker:28-dind
-      alias: docker
   variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_TLS_VERIFY: 1
-    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+    DOCKER_HOST: unix:///var/run/docker.sock
 
 # =========================
 # DOCKER PUSH (solo al mergear a main)
@@ -81,6 +73,7 @@ docker-push:
   extends: .docker-base
   stage: docker
   before_script:
+    - until docker info; do echo "Waiting for Docker..."; sleep 2; done
     - echo "$CI_REGISTRY_PASSWORD" |
       docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
