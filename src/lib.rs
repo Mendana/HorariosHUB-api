@@ -21,11 +21,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
 use crate::modules::health::repository::{HealthRepository, PgHealthRepository};
+use crate::modules::notifications::repository::{NotificationRepository, PgNotificationRepository};
+use crate::modules::notifications::service::{EmailQueue, run_email_worker};
 use crate::modules::proposals::repository::{PgProposalRepository, ProposalRepository};
 use crate::modules::schedule::repository::{PgScheduleRepository, ScheduleRepository};
 use crate::modules::scraper::repository::{PgScraperRepository, ScraperRepository};
 use crate::modules::scraper::service::run_sync;
 use crate::modules::subjects::repository::{PgSubjectRepository, SubjectRepository};
+use crate::modules::user_metrics::repository::{PgUserMetricsRepository, UserMetricsRepository};
 use crate::modules::users::repository::{PgUserRepository, UserRepository};
 use crate::services::email::service::{EmailService, MockEmailService, SmtpEmailService};
 
@@ -40,7 +43,10 @@ pub struct AppState {
     pub proposals_repo: Arc<dyn ProposalRepository>,
     pub subjects_repo: Arc<dyn SubjectRepository>,
     pub scraper_repo: Arc<dyn ScraperRepository>,
+    pub user_metrics_repo: Arc<dyn UserMetricsRepository>,
+    pub notifications_repo: Arc<dyn NotificationRepository>,
     pub email: Arc<dyn EmailService>,
+    pub email_queue: EmailQueue,
     pub cache: Arc<dyn cache::AppCache>,
     pub config: Arc<config::Config>,
     pub auto_select_semaphore: Arc<Semaphore>,
@@ -88,6 +94,10 @@ pub async fn run() -> anyhow::Result<()> {
         &config.base_url,
     )?);
 
+    // 5.5 Cola de emails de notificación (worker en background)
+    let (email_queue, email_rx) = EmailQueue::new(1_000);
+    tokio::spawn(run_email_worker(email_rx, email.clone()));
+
     // 6. Caché
     let cache = Arc::new(cache::MokaCache::new(1_000, 600));
 
@@ -105,8 +115,11 @@ pub async fn run() -> anyhow::Result<()> {
         schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
         subjects_repo: Arc::new(PgSubjectRepository::new(pool.clone())),
         scraper_repo: Arc::new(PgScraperRepository::new(pool.clone())),
+        user_metrics_repo: Arc::new(PgUserMetricsRepository::new(pool.clone())),
+        notifications_repo: Arc::new(PgNotificationRepository::new(pool.clone())),
         pool: Arc::new(pool),
         email,
+        email_queue,
         cache,
         config: Arc::new(config.clone()),
         auto_select_semaphore,
@@ -170,6 +183,8 @@ async fn start_scraper_scheduler(state: AppState) -> anyhow::Result<()> {
 
             match run_sync(
                 state.scraper_repo.as_ref(),
+                state.notifications_repo.as_ref(),
+                &state.email_queue,
                 &full_scraper_url,
                 state.config.scraper_min_sessions,
                 "cronjob",
@@ -226,6 +241,11 @@ pub async fn create_test_app_with_scraper(
     let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
     let subject_repo = Arc::new(PgSubjectRepository::new((*pool).clone()));
     let scraper_repo = Arc::new(PgScraperRepository::new((*pool).clone()));
+    let user_metrics_repo = Arc::new(PgUserMetricsRepository::new((*pool).clone()));
+    let notifications_repo = Arc::new(PgNotificationRepository::new((*pool).clone()));
+    let email: Arc<dyn EmailService> = Arc::new(MockEmailService);
+    let (email_queue, email_rx) = EmailQueue::new(1_000);
+    tokio::spawn(run_email_worker(email_rx, email.clone()));
     let state = AppState {
         pool: pool.clone(),
         health_repo: Arc::new(PgHealthRepository::new((*pool).clone())),
@@ -235,7 +255,10 @@ pub async fn create_test_app_with_scraper(
         schedule_repo,
         subjects_repo: subject_repo,
         scraper_repo,
-        email: Arc::new(MockEmailService),
+        user_metrics_repo,
+        notifications_repo,
+        email,
+        email_queue,
         cache: Arc::new(cache::MokaCache::new(100, 60)),
         config: Arc::new(config::Config {
             database_url: db_url.to_string(),

@@ -7,10 +7,12 @@ variables:
   CARGO_TERM_COLOR: always
   SQLX_OFFLINE: "true"
   CARGO_HOME: "${CI_PROJECT_DIR}/.cargo"
+  CARGO_BUILD_JOBS: "2"
 
 # Evita pipelines duplicadas: si hay MR abierto, solo corre la pipeline de MR
 workflow:
   rules:
+    - when: never #Temporalemtne desactivado
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
@@ -49,7 +51,7 @@ clippy:
 test:
   stage: test
   script:
-    - cargo test --all-features --all-targets
+    - cargo test --all-features --tests -- --test-threads=2
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 

@@ -3,7 +3,9 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     modules::users::{
-        models::{UserPublic, UserRole},
+        models::{
+            NotificationPreferences, UpdateNotificationPreferencesRequest, UserPublic, UserRole,
+        },
         repository::UserRepository,
     },
 };
@@ -77,6 +79,66 @@ pub async fn delete_user(repo: &dyn UserRepository, identifier: &str) -> Result<
 
     tracing::info!(user_id = %user_id, "Usuario eliminado");
     Ok(())
+}
+
+pub async fn get_notification_preferences(
+    repo: &dyn UserRepository,
+    user_id: Uuid,
+) -> Result<NotificationPreferences, AppError> {
+    let (in_app, email) = repo
+        .get_notification_preferences(user_id)
+        .await?
+        .ok_or_else(|| {
+            tracing::warn!(user_id = %user_id, "Usuario no encontrado al leer preferencias de notificación");
+            AppError::NotFound
+        })?;
+
+    Ok(NotificationPreferences { in_app, email })
+}
+
+pub async fn update_notification_preferences(
+    repo: &dyn UserRepository,
+    user_id: Uuid,
+    payload: UpdateNotificationPreferencesRequest,
+) -> Result<NotificationPreferences, AppError> {
+    tracing::debug!(user_id = %user_id, "Actualizando preferencias de notificación");
+
+    let (current_in_app, current_email) = repo
+        .get_notification_preferences(user_id)
+        .await?
+        .ok_or_else(|| {
+            tracing::warn!(user_id = %user_id, "Usuario no encontrado al actualizar preferencias de notificación");
+            AppError::NotFound
+        })?;
+
+    let new_in_app = payload.in_app.unwrap_or(current_in_app);
+    let new_email = payload.email.unwrap_or(current_email);
+
+    if !new_in_app && !new_email {
+        tracing::warn!(user_id = %user_id, "Intento de desactivar ambos canales de notificación a la vez");
+        return Err(AppError::BadRequest(
+            "Debe mantener activo al menos un canal de notificación".into(),
+        ));
+    }
+
+    repo.update_notification_preferences(user_id, new_in_app, new_email)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, user_id = %user_id, "Error al actualizar preferencias de notificación");
+            e
+        })?;
+
+    tracing::info!(
+        user_id = %user_id,
+        in_app = new_in_app,
+        email = new_email,
+        "Preferencias de notificación actualizadas"
+    );
+
+    Ok(NotificationPreferences {
+        in_app: new_in_app,
+        email: new_email,
+    })
 }
 
 #[cfg(test)]
@@ -164,6 +226,20 @@ mod tests {
                 return Err(AppError::Internal(anyhow::anyhow!("db error")));
             }
             Ok(())
+        }
+        async fn get_notification_preferences(
+            &self,
+            _user_id: Uuid,
+        ) -> Result<Option<(bool, bool)>, AppError> {
+            unimplemented!()
+        }
+        async fn update_notification_preferences(
+            &self,
+            _user_id: Uuid,
+            _notify_in_app: bool,
+            _notify_email: bool,
+        ) -> Result<(), AppError> {
+            unimplemented!()
         }
     }
 
@@ -315,6 +391,20 @@ mod tests {
         }
         async fn delete_user(&self, _: Uuid) -> Result<(), AppError> {
             Err(AppError::NotFound)
+        }
+        async fn get_notification_preferences(
+            &self,
+            _: Uuid,
+        ) -> Result<Option<(bool, bool)>, AppError> {
+            Ok(None)
+        }
+        async fn update_notification_preferences(
+            &self,
+            _: Uuid,
+            _: bool,
+            _: bool,
+        ) -> Result<(), AppError> {
+            unimplemented!()
         }
     }
 

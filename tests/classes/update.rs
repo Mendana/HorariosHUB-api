@@ -217,3 +217,43 @@ async fn patch_classes_registra_change_aprobado() {
     assert_eq!(row.new_duration, Some(60));
     assert_eq!(row.new_classroom.as_deref(), Some("Aula 9"));
 }
+
+#[tokio::test]
+async fn patch_classes_notifica_a_suscriptores() {
+    let ctx = setup().await;
+    let token = login_as(&ctx, "prof9@uniovi.es", "professor").await;
+    let id = create_session(&ctx, &token).await;
+    let session_uuid = uuid::Uuid::parse_str(&id).unwrap();
+
+    let _student_token = login_as(&ctx, "stu9@uniovi.es", "student").await;
+    let student_id: uuid::Uuid =
+        sqlx::query_scalar!("SELECT id FROM users WHERE email = $1", "stu9@uniovi.es")
+            .fetch_one(&ctx.pool)
+            .await
+            .unwrap();
+
+    sqlx::query!(
+        "INSERT INTO schedule (user_id, subject, grp) VALUES ($1, 'ALG', 'Teoría')",
+        student_id
+    )
+    .execute(&ctx.pool)
+    .await
+    .unwrap();
+
+    ctx.server
+        .patch(&format!("/classes/{id}"))
+        .add_header("Authorization", format!("Bearer {token}"))
+        .json(&json!({ "classroom": "Aula 2" }))
+        .await;
+
+    let notification = sqlx::query!(
+        r#"SELECT type::text AS notif_type, session_id FROM notifications WHERE user_id = $1"#,
+        student_id
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .expect("Debe existir una notificación para el suscriptor");
+
+    assert_eq!(notification.notif_type.as_deref(), Some("session_modified"));
+    assert_eq!(notification.session_id, Some(session_uuid));
+}

@@ -1,4 +1,4 @@
-use crate::common::setup;
+use crate::common::{setup, verify_user};
 use axum::http::StatusCode;
 use serde_json::json;
 
@@ -201,6 +201,7 @@ async fn post_reset_password_permite_login_con_nueva_contrasena() {
         .post("/auth/register")
         .json(&json!({ "email": "flow@uniovi.es", "password": "Oldpassword123" }))
         .await;
+    verify_user(&ctx.pool, "flow@uniovi.es").await;
 
     let token = setup_reset_token(&ctx.pool, "flow@uniovi.es").await;
 

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.id as user_id,\n                u.email,\n                u.notify_email,\n                u.notify_in_app\n            FROM users u\n            WHERE u.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "notify_email",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "notify_in_app",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "397c37402a4fd6e018c5081d0ffbd2be50f87bcd9f01dfb771c9db4a7f13caef"
+}

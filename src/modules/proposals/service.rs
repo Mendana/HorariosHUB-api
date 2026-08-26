@@ -4,6 +4,10 @@ use crate::{
     errors::AppError,
     modules::{
         classes::repository::ClassRepository,
+        notifications::{
+            repository::NotificationRepository, service as notifications_service,
+            service::EmailQueue,
+        },
         proposals::{
             models::{
                 ApproveProposalResponse, Change, ChangeStatus, ChangeType, ChangeWithAuthor,
@@ -19,6 +23,8 @@ use crate::{
 pub async fn create_proposal(
     repo: &dyn ProposalRepository,
     class_repo: &dyn ClassRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     payload: CreateProposalRequest,
     proposed_by: Uuid,
 ) -> Result<CreateProposalResponse, AppError> {
@@ -104,12 +110,18 @@ pub async fn create_proposal(
         proposed_by = %proposed_by,
         "Propuesta creada"
     );
+
+    notifications_service::notify_proposal_created(notifications_repo, email_queue, change.id)
+        .await;
+
     Ok(CreateProposalResponse::from(change))
 }
 
 pub async fn approve_proposal(
     proposal_repo: &dyn ProposalRepository,
     class_repo: &dyn ClassRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     change_id: Uuid,
     approved_by: Uuid,
 ) -> Result<ApproveProposalResponse, AppError> {
@@ -124,6 +136,7 @@ pub async fn approve_proposal(
         return Err(AppError::Conflict("Change is not pending".into()));
     }
     let change_type = change.change_type.clone();
+    let proposed_by = change.proposed_by;
     match change.change_type {
         ChangeType::Create => approve_create(class_repo, change, approved_by).await?,
         ChangeType::Delete => approve_delete(class_repo, change).await?,
@@ -138,6 +151,16 @@ pub async fn approve_proposal(
         approved_by = %approved_by,
         "Propuesta aprobada"
     );
+
+    notifications_service::notify_proposal_status_changed(
+        notifications_repo,
+        email_queue,
+        change_id,
+        proposed_by,
+        true,
+    )
+    .await;
+
     Ok(ApproveProposalResponse {
         id: (change_id),
         status: (super::models::ChangeStatus::Approved),
@@ -240,6 +263,8 @@ async fn approve_modify(class_repo: &dyn ClassRepository, change: Change) -> Res
 
 pub async fn reject_proposal(
     proposal_repo: &dyn ProposalRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     change_id: Uuid,
 ) -> Result<RejectProposalResponse, AppError> {
     tracing::debug!(change_id = %change_id, "Rechazando propuesta");
@@ -256,6 +281,16 @@ pub async fn reject_proposal(
     proposal_repo.reject(change_id).await?;
 
     tracing::info!(change_id = %change_id, "Propuesta rechazada");
+
+    notifications_service::notify_proposal_status_changed(
+        notifications_repo,
+        email_queue,
+        change_id,
+        change.proposed_by,
+        false,
+    )
+    .await;
+
     Ok(RejectProposalResponse {
         id: (change_id),
         status: (super::models::ChangeStatus::Rejected),

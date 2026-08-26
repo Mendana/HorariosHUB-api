@@ -356,3 +356,79 @@ async fn post_proposals_persiste_en_base_de_datos() {
     assert_eq!(row.subject, Some("ALG".to_string()));
     assert_eq!(row.grp, Some("Teoría".to_string()));
 }
+
+#[tokio::test]
+async fn post_proposals_notifica_a_profesores_y_admins_pero_no_al_autor_student() {
+    let ctx = setup().await;
+
+    let professor_token = login_as(&ctx, "prof_reviewer@uniovi.es", "professor").await;
+    let professor_id: uuid::Uuid = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE email = $1",
+        "prof_reviewer@uniovi.es"
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+
+    let admin_token = login_as(&ctx, "admin_reviewer@uniovi.es", "admin").await;
+    let admin_id: uuid::Uuid = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE email = $1",
+        "admin_reviewer@uniovi.es"
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    let _ = (professor_token, admin_token);
+
+    let student_token = login_as(&ctx, "student_proposer@uniovi.es", "student").await;
+    let student_id: uuid::Uuid = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE email = $1",
+        "student_proposer@uniovi.es"
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+
+    let response = ctx
+        .server
+        .post("/proposals")
+        .add_header("Authorization", format!("Bearer {student_token}"))
+        .json(&json!({
+            "changeType": "create",
+            "changes": {
+                "subject": "ALG",
+                "grp": "Teoría",
+                "newStartsAt": "2025-09-15T09:00:00Z",
+                "newDuration": 90,
+                "newClassroom": "Aula 101"
+            }
+        }))
+        .await;
+    response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    let proposal_id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
+
+    for reviewer_id in [professor_id, admin_id] {
+        let notification = sqlx::query!(
+            r#"SELECT type::text AS notif_type FROM notifications
+               WHERE user_id = $1 AND proposal_id = $2 AND type = 'proposal_created'"#,
+            reviewer_id,
+            proposal_id
+        )
+        .fetch_one(&ctx.pool)
+        .await
+        .expect("Debe existir una notificación de propuesta nueva para el revisor");
+
+        assert_eq!(notification.notif_type.as_deref(), Some("proposal_created"));
+    }
+
+    // El estudiante que crea la propuesta no es profesor/admin: no se le notifica
+    let count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM notifications WHERE user_id = $1",
+        student_id
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(count, Some(0));
+}

@@ -12,6 +12,10 @@ use crate::{
             },
             repository::ClassRepository,
         },
+        notifications::{
+            models::SessionChangeType, repository::NotificationRepository,
+            service as notifications_service, service::EmailQueue,
+        },
         proposals::{
             models::{ChangeStatus, ChangeType, CreateChangeInput},
             repository::ProposalRepository,
@@ -22,6 +26,8 @@ use crate::{
 pub async fn create_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     payload: CreateClassRequest,
     created_by: Uuid,
 ) -> Result<ClassItem, AppError> {
@@ -85,12 +91,27 @@ pub async fn create_class(
         })?;
 
     tracing::info!(session_id = %session.id, subject = %session.subject, grp = %session.grp, created_by = %created_by, "Clase creada");
+
+    if session.grp.eq_ignore_ascii_case("examen") {
+        notifications_service::notify_exam_added(
+            notifications_repo,
+            email_queue,
+            session.id,
+            &session.subject,
+            &session.grp,
+            session.starts_at,
+        )
+        .await;
+    }
+
     Ok(session_to_class_item(session))
 }
 
 pub async fn update_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     id: Uuid,
     professor_id: Uuid,
     payload: UpdateClassRequest,
@@ -174,6 +195,17 @@ pub async fn update_class(
         })?;
 
     tracing::info!(session_id = %session.id, subject = %session.subject, grp = %session.grp, updated_by = %professor_id, "Clase actualizada");
+
+    notifications_service::notify_session_modified(
+        notifications_repo,
+        email_queue,
+        session.id,
+        &session.subject,
+        &session.grp,
+        SessionChangeType::Modified,
+    )
+    .await;
+
     Ok(session_to_class_item(session))
 }
 
@@ -185,6 +217,8 @@ pub async fn update_class(
 pub async fn delete_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
+    notifications_repo: &dyn NotificationRepository,
+    email_queue: &EmailQueue,
     id: Uuid,
     professor_id: Uuid,
 ) -> Result<DeleteClassResponse, AppError> {
@@ -211,6 +245,16 @@ pub async fn delete_class(
             status: ChangeStatus::Approved,
         })
         .await?;
+
+    notifications_service::notify_session_modified(
+        notifications_repo,
+        email_queue,
+        id,
+        &session.subject,
+        &session.grp,
+        SessionChangeType::Deleted,
+    )
+    .await;
 
     class_repo.delete_session(id).await?;
 

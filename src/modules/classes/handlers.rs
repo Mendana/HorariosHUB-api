@@ -35,6 +35,8 @@ pub async fn create_class(
     let response = service::create_class(
         state.class_repo.as_ref(),
         state.proposals_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
         payload,
         professor.id,
     )
@@ -58,6 +60,8 @@ pub async fn update_class(
     let response = service::update_class(
         state.class_repo.as_ref(),
         state.proposals_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
         id,
         professor.id,
         payload,
@@ -77,6 +81,8 @@ pub async fn delete_class(
     let response = service::delete_class(
         state.class_repo.as_ref(),
         state.proposals_repo.as_ref(),
+        state.notifications_repo.as_ref(),
+        &state.email_queue,
         id,
         professor.id,
     )
