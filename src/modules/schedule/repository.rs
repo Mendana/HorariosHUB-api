@@ -40,6 +40,7 @@ impl PgScheduleRepository {
 
 #[async_trait::async_trait]
 impl ScheduleRepository for PgScheduleRepository {
+    #[tracing::instrument(skip(self), fields(user_id = %user_id, start_time = %start_time, end_time = %end_time))]
     async fn fetch_user_schedule_rows(
         &self,
         user_id: &Uuid,
@@ -74,6 +75,7 @@ impl ScheduleRepository for PgScheduleRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip(self, users), fields(from_user = %users.from_user, to_user = %users.to_user))]
     async fn copy_schedule_rows(&self, users: &CopyScheduleUsers) -> Result<CopiedRows, AppError> {
         let count = sqlx::query!(
             r#"

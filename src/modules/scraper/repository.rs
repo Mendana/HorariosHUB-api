@@ -172,6 +172,7 @@ impl PgScraperRepository {
 
 #[async_trait::async_trait]
 impl ScraperRepository for PgScraperRepository {
+    #[tracing::instrument(skip(self), fields(locked_by = %locked_by))]
     async fn acquire_lock(&self, locked_by: &str) -> Result<bool, AppError> {
         let result = sqlx::query!(
             r#"
@@ -190,6 +191,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn release_lock(&self) -> Result<(), AppError> {
         sqlx::query!("DELETE FROM scraper_locks WHERE id = 'scraper_run'")
             .execute(&self.pool)
@@ -197,6 +199,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn delete_all_sessions(&self) -> Result<usize, AppError> {
         let result = sqlx::query!("DELETE FROM sessions")
             .execute(&self.pool)
@@ -204,6 +207,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(result.rows_affected() as usize)
     }
 
+    #[tracing::instrument(skip(self, sessions), fields(count = sessions.len()))]
     async fn upsert_subject_groups_batch(
         &self,
         sessions: &[ParsedSession],
@@ -232,6 +236,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, sessions), fields(count = sessions.len()))]
     async fn insert_sessions_batch(&self, sessions: &[ParsedSession]) -> Result<usize, AppError> {
         let mut inserted = 0;
 
@@ -265,6 +270,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(inserted)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_approved_changes(&self) -> Result<Vec<ApprovedChange>, AppError> {
         let changes = sqlx::query_as!(
             ApprovedChange,
@@ -293,6 +299,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(changes)
     }
 
+    #[tracing::instrument(skip(self, starts_at), fields(subject = %subject, grp = %grp))]
     async fn find_session_by_natural_key(
         &self,
         subject: &str,
@@ -314,6 +321,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(result)
     }
 
+    #[tracing::instrument(skip(self, new_starts_at, new_duration, new_classroom), fields(session_id = %session_id))]
     async fn apply_modify(
         &self,
         session_id: Uuid,
@@ -341,6 +349,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
     async fn delete_session_by_id(&self, session_id: Uuid) -> Result<(), AppError> {
         sqlx::query!("DELETE FROM sessions WHERE id=$1", session_id)
             .execute(&self.pool)
@@ -349,6 +358,10 @@ impl ScraperRepository for PgScraperRepository {
         Ok(())
     }
 
+    #[tracing::instrument(
+        skip(self, starts_at, duration_min, classroom),
+        fields(subject = %subject, grp = %grp, created_by = %created_by)
+    )]
     async fn insert_session_from_change(
         &self,
         subject: &str,
@@ -393,6 +406,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn archive_rejected_changes(&self) -> Result<usize, AppError> {
         let result = sqlx::query!(
             r#"
@@ -427,6 +441,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(result.rows_affected() as usize)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn reject_and_archive_orphan_pending(&self) -> Result<usize, AppError> {
         let result = sqlx::query!(
             r#"
@@ -468,6 +483,7 @@ impl ScraperRepository for PgScraperRepository {
         Ok(result.rows_affected() as usize)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn archive_orphan_approved_changes(&self) -> Result<usize, AppError> {
         let result = sqlx::query!(
             r#"

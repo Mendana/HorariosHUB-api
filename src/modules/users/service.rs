@@ -10,6 +10,7 @@ use crate::{
     },
 };
 
+#[tracing::instrument(skip(repo))]
 pub async fn get_all_users(repo: &dyn UserRepository) -> Result<Vec<UserPublic>, AppError> {
     let users = repo.get_all_users().await?;
 
@@ -24,6 +25,7 @@ pub async fn get_all_users(repo: &dyn UserRepository) -> Result<Vec<UserPublic>,
     Ok(users_public)
 }
 
+#[tracing::instrument(skip(repo), fields(identifier = %identifier, role = %role))]
 pub async fn change_user_role(
     repo: &dyn UserRepository,
     identifier: &str,
@@ -59,6 +61,7 @@ pub async fn change_user_role(
     Ok(())
 }
 
+#[tracing::instrument(skip(repo), fields(identifier = %identifier))]
 pub async fn delete_user(repo: &dyn UserRepository, identifier: &str) -> Result<(), AppError> {
     let user_id = match Uuid::parse_str(identifier) {
         Ok(uuid) => uuid,
@@ -81,6 +84,7 @@ pub async fn delete_user(repo: &dyn UserRepository, identifier: &str) -> Result<
     Ok(())
 }
 
+#[tracing::instrument(skip(repo), fields(user_id = %user_id))]
 pub async fn get_notification_preferences(
     repo: &dyn UserRepository,
     user_id: Uuid,
@@ -96,6 +100,7 @@ pub async fn get_notification_preferences(
     Ok(NotificationPreferences { in_app, email })
 }
 
+#[tracing::instrument(skip(repo, payload), fields(user_id = %user_id))]
 pub async fn update_notification_preferences(
     repo: &dyn UserRepository,
     user_id: Uuid,

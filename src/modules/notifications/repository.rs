@@ -56,6 +56,7 @@ impl PgNotificationRepository {
 
 #[async_trait::async_trait]
 impl NotificationRepository for PgNotificationRepository {
+    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
     async fn find_subscribers_by_session(
         &self,
         session_id: Uuid,
@@ -81,6 +82,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(recipients)
     }
 
+    #[tracing::instrument(skip(self), fields(roles = ?roles))]
     async fn find_users_by_roles(
         &self,
         roles: &[UserRole],
@@ -104,6 +106,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(recipients)
     }
 
+    #[tracing::instrument(skip(self, notifications), fields(count = notifications.len()))]
     async fn insert_many(&self, notifications: &[NewNotification]) -> Result<(), AppError> {
         let mut tx = self.pool.begin().await?;
 
@@ -128,6 +131,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn find_user_by_id(&self, user_id: Uuid) -> Result<Option<NotifyRecipient>, AppError> {
         let recipient = sqlx::query_as!(
             NotifyRecipient,
@@ -148,6 +152,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(recipient)
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id, read = ?read, offset = %offset, limit = %limit))]
     async fn get_notifications_by_user_id(
         &self,
         user_id: Uuid,
@@ -199,6 +204,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok((notifications, total))
     }
 
+    #[tracing::instrument(skip(self), fields(notification_id = %id))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Notification>, AppError> {
         let notification = sqlx::query_as!(
             Notification,
@@ -224,6 +230,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(notification)
     }
 
+    #[tracing::instrument(skip(self), fields(notification_id = %id))]
     async fn mark_as_read(&self, id: Uuid) -> Result<(), AppError> {
         sqlx::query!("UPDATE notifications SET read = true WHERE id = $1", id)
             .execute(&self.pool)
@@ -232,6 +239,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn mark_all_as_read(&self, user_id: Uuid) -> Result<u32, AppError> {
         let result = sqlx::query!(
             "UPDATE notifications SET read = true WHERE user_id = $1 AND read = false",
@@ -243,6 +251,7 @@ impl NotificationRepository for PgNotificationRepository {
         Ok(result.rows_affected() as u32)
     }
 
+    #[tracing::instrument(skip(self), fields(notification_id = %id))]
     async fn delete_by_id(&self, id: Uuid) -> Result<(), AppError> {
         sqlx::query!("DELETE FROM notifications WHERE id = $1", id)
             .execute(&self.pool)

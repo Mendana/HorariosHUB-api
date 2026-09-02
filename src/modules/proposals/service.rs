@@ -20,6 +20,10 @@ use crate::{
     },
 };
 
+#[tracing::instrument(
+    skip(repo, class_repo, notifications_repo, email_queue, payload),
+    fields(proposed_by = %proposed_by)
+)]
 pub async fn create_proposal(
     repo: &dyn ProposalRepository,
     class_repo: &dyn ClassRepository,
@@ -117,6 +121,10 @@ pub async fn create_proposal(
     Ok(CreateProposalResponse::from(change))
 }
 
+#[tracing::instrument(
+    skip(proposal_repo, class_repo, notifications_repo, email_queue),
+    fields(change_id = %change_id, approved_by = %approved_by)
+)]
 pub async fn approve_proposal(
     proposal_repo: &dyn ProposalRepository,
     class_repo: &dyn ClassRepository,
@@ -167,6 +175,7 @@ pub async fn approve_proposal(
     })
 }
 
+#[tracing::instrument(skip(class_repo, change), fields(change_id = %change.id, approved_by = %approved_by))]
 async fn approve_create(
     class_repo: &dyn ClassRepository,
     change: Change,
@@ -204,6 +213,7 @@ async fn approve_create(
 /// Intenta primero usar `session_id` directamente. Si está a NULL (el scraper
 /// corrió entre la propuesta y la aprobación y lo puso a NULL vía ON DELETE SET NULL),
 /// cae a buscar la sesión por clave natural (subject, grp, prev_starts_at).
+#[tracing::instrument(skip(class_repo, change), fields(change_id = %change.id))]
 async fn resolve_session_id(
     class_repo: &dyn ClassRepository,
     change: &Change,
@@ -239,12 +249,14 @@ async fn resolve_session_id(
         .ok_or(AppError::NotFound)
 }
 
+#[tracing::instrument(skip(class_repo, change), fields(change_id = %change.id))]
 async fn approve_delete(class_repo: &dyn ClassRepository, change: Change) -> Result<(), AppError> {
     let session_id = resolve_session_id(class_repo, &change).await?;
     class_repo.delete_session(session_id).await?;
     Ok(())
 }
 
+#[tracing::instrument(skip(class_repo, change), fields(change_id = %change.id))]
 async fn approve_modify(class_repo: &dyn ClassRepository, change: Change) -> Result<(), AppError> {
     let session_id = resolve_session_id(class_repo, &change).await?;
 
@@ -261,6 +273,7 @@ async fn approve_modify(class_repo: &dyn ClassRepository, change: Change) -> Res
     Ok(())
 }
 
+#[tracing::instrument(skip(proposal_repo, notifications_repo, email_queue), fields(change_id = %change_id))]
 pub async fn reject_proposal(
     proposal_repo: &dyn ProposalRepository,
     notifications_repo: &dyn NotificationRepository,
@@ -297,6 +310,7 @@ pub async fn reject_proposal(
     })
 }
 
+#[tracing::instrument(skip(proposal_repo), fields(status = ?status, page = %page, limit = %limit))]
 pub async fn list_proposals(
     proposal_repo: &dyn ProposalRepository,
     status: Option<ProposalStatusFilter>,
@@ -326,6 +340,7 @@ pub async fn list_proposals(
     })
 }
 
+#[tracing::instrument(skip(proposal_repo), fields(user_id = %user_id, page = %page, limit = %limit))]
 pub async fn list_my_proposals(
     proposal_repo: &dyn ProposalRepository,
     user_id: Uuid,

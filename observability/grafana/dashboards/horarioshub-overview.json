@@ -226,6 +226,31 @@
           "expr": "{service=\"backend\", level=~\"${level:regex}\"} | json message=\"fields.message\", target, latency=\"fields.latency\", status=\"fields.status\", method=\"span.method\", uri=\"span.uri\" | line_format \"{{.level}}\\t{{.message}}\""
         }
       ]
+    },
+    { "id": 13, "type": "row", "title": "Trazas", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 } },
+    {
+      "id": 14,
+      "title": "Trazas recientes (Tempo)",
+      "type": "traces",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 42 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceqlSearch",
+          "filters": [
+            {
+              "id": "service-name",
+              "tag": "service.name",
+              "operator": "=",
+              "value": ["horarioshub-api"],
+              "valueType": "string",
+              "scope": "resource"
+            }
+          ],
+          "limit": 20
+        }
+      ]
     }
   ]
 }

@@ -58,6 +58,7 @@ impl PgProposalRepository {
 
 #[async_trait::async_trait]
 impl ProposalRepository for PgProposalRepository {
+    #[tracing::instrument(skip(self, input), fields(proposed_by = %input.proposed_by, change_type = ?input.change_type))]
     async fn create_change(&self, input: CreateChangeInput) -> Result<Change, AppError> {
         let change = sqlx::query_as!(
             Change,
@@ -112,6 +113,7 @@ impl ProposalRepository for PgProposalRepository {
         Ok(change)
     }
 
+    #[tracing::instrument(skip(self), fields(change_id = %id))]
     async fn find_by_id(&self, id: Uuid) -> Result<Change, AppError> {
         let change = sqlx::query_as!(
             Change,
@@ -143,6 +145,7 @@ impl ProposalRepository for PgProposalRepository {
         Ok(change)
     }
 
+    #[tracing::instrument(skip(self), fields(change_id = %id))]
     async fn approve(&self, id: Uuid) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -159,6 +162,7 @@ impl ProposalRepository for PgProposalRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(change_id = %id))]
     async fn reject(&self, id: Uuid) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -175,6 +179,7 @@ impl ProposalRepository for PgProposalRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(status = ?status, offset = %offset, limit = %limit))]
     async fn list_by_status(
         &self,
         status: Option<ChangeStatus>,
@@ -269,6 +274,7 @@ impl ProposalRepository for PgProposalRepository {
         }
     }
 
+    #[tracing::instrument(skip(self), fields(proposer_id = %proposer_id, offset = %offset, limit = %limit))]
     async fn list_by_proposer(
         &self,
         proposer_id: Uuid,

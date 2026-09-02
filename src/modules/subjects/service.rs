@@ -15,6 +15,7 @@ use crate::{
     },
 };
 
+#[tracing::instrument(skip(repo), fields(user_id = %user_id))]
 pub async fn get_catalog_by_user(
     repo: &dyn SubjectRepository,
     user_id: Uuid,
@@ -47,6 +48,7 @@ pub async fn get_catalog_by_user(
     Ok(catalog)
 }
 
+#[tracing::instrument(skip(repo, groups_ids), fields(user_id = %user_id, count = groups_ids.len()))]
 pub async fn set_user_selection_destructive(
     repo: &dyn SubjectRepository,
     user_id: Uuid,
@@ -65,6 +67,7 @@ pub async fn set_user_selection_destructive(
     })
 }
 
+#[tracing::instrument(skip(repo, semaphore, user_email, scraper_url), fields(user_id = %user_id))]
 pub async fn auto_select_subjects(
     repo: Arc<dyn SubjectRepository>,
     semaphore: Arc<Semaphore>,
@@ -142,6 +145,7 @@ pub async fn auto_select_subjects(
     })
 }
 
+#[tracing::instrument(skip(repo), fields(user_id = %user_id))]
 pub async fn auto_select_subjects_status(
     repo: &dyn SubjectRepository,
     user_id: Uuid,
@@ -184,6 +188,7 @@ pub async fn get_all_subjects_catalog(
     Ok(rows)
 }
 
+#[tracing::instrument(skip(repo), fields(subject = %subject))]
 pub async fn get_all_groups_per_subject(
     repo: &dyn SubjectRepository,
     subject: &str,
@@ -208,6 +213,7 @@ fn is_uo_username(username: &str) -> bool {
 /// # Formato esperado de respuesta
 /// CSV con una línea por grupo: `subject,grp` (ej. `AL,T.1`)
 /// TODO: Confirmar formato exacto cuando todo esté listo
+#[tracing::instrument(fields(url = %url))]
 async fn fetch_groups_for_uo(url: &str) -> Result<Vec<(String, String)>, AppError> {
     tracing::info!(url, "Llamando al scraper de auto-select");
 
