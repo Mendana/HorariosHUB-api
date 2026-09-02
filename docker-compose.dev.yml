@@ -30,8 +30,14 @@ services:
       dockerfile: docker/backend.dev.Dockerfile
     env_file:
       - .env
+    environment:
+      # json permite que Promtail/Loki parseen los logs correctamente (ver
+      # perfil "observability" más abajo). Por defecto se queda en "pretty"
+      # para que la consola sea legible sin tener que levantar ese perfil.
+      LOG_FORMAT: ${LOG_FORMAT:-pretty}
     ports:
       - "3001:3001"
+      - "9090:9090" # métricas Prometheus (/metrics)
     volumes:
       - .:/app
       - cargo_cache:/usr/local/cargo
@@ -44,6 +50,72 @@ services:
     networks:
       - internal
 
+  # ---------------------------------------------------------------------
+  # Observabilidad (opcional): Prometheus + Loki + Promtail + Grafana.
+  # Se activan con el perfil "observability":
+  #
+  #   LOG_FORMAT=json docker compose --profile observability up
+  #
+  # Grafana queda en http://localhost:3300 (login anónimo activado), con un
+  # dashboard ya provisionado. Ver observability/ para la configuración de
+  # cada pieza y el README para más detalle.
+  # ---------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus
+    ports:
+      - "9091:9090"
+    networks:
+      - internal
+
+  loki:
+    image: grafana/loki:2.9.8
+    profiles: ["observability"]
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_dev_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - internal
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    profiles: ["observability"]
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_dev_data:/var/lib/grafana
+    ports:
+      - "3300:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - internal
+
 networks:
   internal:
     driver: bridge
@@ -52,3 +124,6 @@ volumes:
   postgres_dev_data:
   cargo_cache:
   target_cache:
+  prometheus_dev_data:
+  loki_dev_data:
+  grafana_dev_data:
