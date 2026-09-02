@@ -99,6 +99,27 @@ cargo test --all-features --all-targets
 
 ---
 
+## Observabilidad en local (Grafana + Prometheus + Loki)
+
+Para depurar más fácilmente, hay un stack de observabilidad local que replica lo que se usa en producción: Prometheus para métricas, Loki para logs (vía Promtail) y Grafana para verlo todo junto. Vive en el mismo `docker-compose.dev.yml`, activado bajo el perfil `observability` (no arranca con un `docker compose up` normal).
+
+```bash
+LOG_FORMAT=json docker compose --profile observability up
+```
+
+- **Grafana**: http://localhost:3300 (usuario `admin` / contraseña `admin`, o entra directamente porque el login anónimo está activado). Ya trae provisionado un dashboard "HorariosHub - Overview (dev)" con estado del backend, requests/s, latencia p95, tasa de errores 5xx, top endpoints y los logs en vivo (filtrables por nivel).
+- **Prometheus**: http://localhost:9091
+- **Métricas del backend**: http://localhost:9090/metrics
+- **Loki**: http://localhost:3100 (normalmente no hace falta entrar directamente, se consulta desde Grafana)
+
+`LOG_FORMAT=json` hace que el backend loguee en JSON en lugar del formato "pretty" de consola, para que Promtail pueda parsear los campos (`level`, `target`, `message`, etc.) y Grafana los muestre con filtros útiles. Es opcional: si haces `docker compose up` a secas (sin el perfil ni la variable), el log sigue siendo el "pretty" de siempre en la terminal. Si activas el perfil `observability` sin poner `LOG_FORMAT=json`, el backend sigue en modo "pretty" y Promtail no podrá parsear los campos (los logs le seguirán llegando a Loki, pero como texto plano sin `level`/`target`).
+
+En el panel de logs de Grafana, la línea que se ve es solo `nivel + mensaje` (no el JSON crudo) — el resto de campos (`latency`, `status`, `method`, `uri`, `target`...) están parseados y se ven al hacer clic en una línea ("Log details"). El desplegable **level** de arriba del dashboard filtra los logs y el gráfico de barras por nivel.
+
+Toda la configuración vive en [observability/](observability/): `prometheus/prometheus.yml` (qué se scrapea), `loki/loki-config.yml`, `promtail/promtail-config.yml` (qué contenedores se leen y cómo se parsean) y `grafana/provisioning/` (datasources y dashboards). Se puede añadir más dashboards simplemente dejando el `.json` en `observability/grafana/dashboards/`.
+
+---
+
 ## BASE DE DATOS
 
 Al levantar el entorno de esta manera, la base de datos viene con 3 usuarios ya verificados:

@@ -57,7 +57,11 @@ pub async fn run() -> anyhow::Result<()> {
     let config = config::Config::load()?;
 
     // 2. Configurar logging según entorno
-    let fmt_layer = if config.is_production() {
+    // LOG_FORMAT=json permite forzar salida JSON en desarrollo (p.ej. para
+    // que Promtail/Loki puedan parsear los logs correctamente).
+    let json_logs = config.is_production()
+        || std::env::var("LOG_FORMAT").is_ok_and(|v| v.eq_ignore_ascii_case("json"));
+    let fmt_layer = if json_logs {
         tracing_subscriber::fmt::layer().json().boxed()
     } else {
         tracing_subscriber::fmt::layer().pretty().boxed()
