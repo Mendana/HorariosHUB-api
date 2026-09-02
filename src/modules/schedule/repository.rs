@@ -81,6 +81,7 @@ impl ScheduleRepository for PgScheduleRepository {
         SELECT $1, subject, grp
         FROM schedule
         WHERE user_id = $2
+        ON CONFLICT (user_id, subject, grp) DO NOTHING
         "#,
             users.to_user,
             users.from_user
