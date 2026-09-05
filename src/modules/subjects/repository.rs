@@ -59,6 +59,7 @@ impl PgSubjectRepository {
 
 #[async_trait::async_trait]
 impl SubjectRepository for PgSubjectRepository {
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn get_catalog_by_user(&self, user_id: Uuid) -> Result<Vec<SubjectGroupRow>, AppError> {
         let rows = sqlx::query_as!(
             SubjectGroupRow,
@@ -76,6 +77,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip(self, groups_ids), fields(user_id = %user_id, count = groups_ids.len()))]
     async fn set_user_selection_destructive(
         &self,
         user_id: Uuid,
@@ -115,6 +117,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, groups), fields(user_id = %user_id, count = groups.len()))]
     async fn set_user_selection_by_subject_grp(
         &self,
         user_id: Uuid,
@@ -146,6 +149,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(count)
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn create_auto_select_job(&self, user_id: Uuid) -> Result<Uuid, AppError> {
         let mut tx = self.pool.begin().await?;
 
@@ -175,6 +179,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(row.id)
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn get_active_job_for_user(&self, user_id: Uuid) -> Result<Option<Uuid>, AppError> {
         let row = sqlx::query!(
             r#"
@@ -191,6 +196,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(row.map(|r| r.id))
     }
 
+    #[tracing::instrument(skip(self), fields(job_id = %job_id, groups_selected = %groups_selected))]
     async fn complete_auto_select_job(
         &self,
         job_id: Uuid,
@@ -213,6 +219,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, error), fields(job_id = %job_id))]
     async fn fail_auto_select_job(&self, job_id: Uuid, error: &str) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -231,6 +238,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn get_latest_job_for_user(
         &self,
         user_id: Uuid,
@@ -268,6 +276,7 @@ impl SubjectRepository for PgSubjectRepository {
         Ok(subjects)
     }
 
+    #[tracing::instrument(skip(self), fields(subject = %subject))]
     async fn get_all_groups_per_subject(
         &self,
         subject: &str,

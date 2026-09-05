@@ -23,6 +23,10 @@ use crate::{
     },
 };
 
+#[tracing::instrument(
+    skip(class_repo, proposals_repo, notifications_repo, email_queue, payload),
+    fields(created_by = %created_by, group_id = ?payload.group_id)
+)]
 pub async fn create_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
@@ -107,6 +111,10 @@ pub async fn create_class(
     Ok(session_to_class_item(session))
 }
 
+#[tracing::instrument(
+    skip(class_repo, proposals_repo, notifications_repo, email_queue, payload),
+    fields(session_id = %id, professor_id = %professor_id)
+)]
 pub async fn update_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
@@ -214,6 +222,10 @@ pub async fn update_class(
 /// # Errores
 /// - [`AppError::NotFound`] si no se encuentra la sesión a eliminar
 /// - [`AppError::AppError`] si ocurre un error durante la operación de eliminación
+#[tracing::instrument(
+    skip(class_repo, proposals_repo, notifications_repo, email_queue),
+    fields(session_id = %id, professor_id = %professor_id)
+)]
 pub async fn delete_class(
     class_repo: &dyn ClassRepository,
     proposals_repo: &dyn ProposalRepository,
@@ -270,6 +282,7 @@ pub async fn delete_class(
     })
 }
 
+#[tracing::instrument(skip(class_repo, params), fields(search = ?params.search, week = ?params.week))]
 pub async fn get_classes(
     class_repo: &dyn ClassRepository,
     params: ListClassesQueryParams,
@@ -323,6 +336,7 @@ pub async fn get_classes(
     Ok(ListClassesResponse { classes, total })
 }
 
+#[tracing::instrument(skip(class_repo, subject, subject_type), fields(group_id = ?group_id))]
 async fn resolve_subject_group(
     group_id: Option<Uuid>,
     subject: Option<String>,

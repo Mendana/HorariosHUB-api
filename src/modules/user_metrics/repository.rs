@@ -20,6 +20,7 @@ impl PgUserMetricsRepository {
 
 #[async_trait::async_trait]
 impl UserMetricsRepository for PgUserMetricsRepository {
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn fetch_all_user_rows(&self, user_id: &Uuid) -> Result<Vec<UserSessionRow>, AppError> {
         let rows = sqlx::query_as!(
             UserSessionRow,

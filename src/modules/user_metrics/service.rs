@@ -14,6 +14,7 @@ use crate::{
     },
 };
 
+#[tracing::instrument(skip(metrics_repo), fields(user_id = %user_id, semester = ?semester))]
 pub async fn get_user_metrics(
     metrics_repo: &dyn UserMetricsRepository,
     user_id: Uuid,
@@ -74,6 +75,7 @@ pub async fn get_user_metrics(
 /// Serie semanal (para gráfica de evolución) entre la primera y la última semana con datos
 /// dentro del filtro pedido. Las semanas intermedias sin clase se rellenan a cero; si no hay
 /// ninguna sesión en el filtro, no hay rango que anclar y se devuelve un array vacío.
+#[tracing::instrument(skip(metrics_repo), fields(user_id = %user_id, semester = ?semester))]
 pub async fn get_weekly_evolution(
     metrics_repo: &dyn UserMetricsRepository,
     user_id: Uuid,
