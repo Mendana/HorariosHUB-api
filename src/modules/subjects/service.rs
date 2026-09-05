@@ -106,7 +106,7 @@ pub async fn auto_select_subjects(
     tracing::info!(user_id = %user_id, job_id = %job_id, "Job de auto-select iniciado");
 
     let repo_clone = repo.clone();
-    let full_url = format!("{scraper_url}/auto-select/{uo_username}");
+    let full_url = format!("{scraper_url}/groups?uo={uo_username}");
 
     tokio::spawn(async move {
         let _permit = permit; // El semáforo se libera al salir de este bloque
@@ -211,8 +211,7 @@ fn is_uo_username(username: &str) -> bool {
 /// Llama al scraper de auto-select y devuelve la lista de grupos del alumno.
 ///
 /// # Formato esperado de respuesta
-/// CSV con una línea por grupo: `subject,grp` (ej. `AL,T.1`)
-/// TODO: Confirmar formato exacto cuando todo esté listo
+/// CSV con cabecera `Subject,Group` seguida de una línea por grupo: `subject,grp` (ej. `AL,T.1`)
 #[tracing::instrument(fields(url = %url))]
 async fn fetch_groups_for_uo(url: &str) -> Result<Vec<(String, String)>, AppError> {
     tracing::info!(url, "Llamando al scraper de auto-select");
@@ -253,8 +252,12 @@ async fn fetch_groups_for_uo(url: &str) -> Result<Vec<(String, String)>, AppErro
 
 fn parse_groups_response(body: &str) -> Result<Vec<(String, String)>, AppError> {
     let mut groups = Vec::new();
+    let mut lines = body.lines().enumerate();
 
-    for (line_num, line) in body.lines().enumerate() {
+    // La primera línea es la cabecera del CSV (`Subject,Group`), se descarta.
+    lines.next();
+
+    for (line_num, line) in lines {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -302,7 +305,7 @@ mod tests {
 
     #[test]
     fn parse_grupos_correcto() {
-        let body = "AL,T.1\nALG,T.2\n\n# comentario\nFIS,P.3\n";
+        let body = "Subject,Group\nAL,T.1\nALG,T.2\n\n# comentario\nFIS,P.3\n";
         let groups = parse_groups_response(body).unwrap();
         assert_eq!(groups.len(), 3);
         assert_eq!(groups[0], ("AL".to_string(), "T.1".to_string()));
@@ -312,8 +315,15 @@ mod tests {
 
     #[test]
     fn parse_grupos_lineas_malformadas_ignoradas() {
-        let body = "AL,T.1\nmalformada\n,sinsubject\nALG,T.2\n";
+        let body = "Subject,Group\nAL,T.1\nmalformada\n,sinsubject\nALG,T.2\n";
         let groups = parse_groups_response(body).unwrap();
         assert_eq!(groups.len(), 2);
+    }
+
+    #[test]
+    fn parse_grupos_solo_cabecera_sin_grupos() {
+        let body = "Subject,Group\n";
+        let groups = parse_groups_response(body).unwrap();
+        assert!(groups.is_empty());
     }
 }
