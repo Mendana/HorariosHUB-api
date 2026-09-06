@@ -159,10 +159,11 @@ impl ClassRepository for PgClassRepository {
                 classroom,
                 source,
                 created_by,
+                created_by_email,
                 is_overridden,
                 scraped_at
             )
-            VALUES ($1, $2, $3, $4, $5, 'manual', $6, false, NULL)
+            VALUES ($1, $2, $3, $4, $5, 'manual', $6, (SELECT email FROM users WHERE id = $6), false, NULL)
             RETURNING
                 id,
                 subject,

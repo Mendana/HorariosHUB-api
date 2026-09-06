@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO sessions (\n                subject,\n                grp,\n                starts_at,\n                duration_min,\n                classroom,\n                source,\n                created_by,\n                is_overridden,\n                scraped_at\n            )\n            VALUES ($1, $2, $3, $4, $5, 'manual', $6, false, NULL)\n            RETURNING\n                id,\n                subject,\n                grp,\n                starts_at,\n                duration_min,\n                classroom,\n                source AS \"source: SessionSource\",\n                created_by,\n                is_overridden\n            ",
+  "query": "\n            INSERT INTO sessions (\n                subject,\n                grp,\n                starts_at,\n                duration_min,\n                classroom,\n                source,\n                created_by,\n                created_by_email,\n                is_overridden,\n                scraped_at\n            )\n            VALUES ($1, $2, $3, $4, $5, 'manual', $6, (SELECT email FROM users WHERE id = $6), false, NULL)\n            RETURNING\n                id,\n                subject,\n                grp,\n                starts_at,\n                duration_min,\n                classroom,\n                source AS \"source: SessionSource\",\n                created_by,\n                is_overridden\n            ",
   "describe": {
     "columns": [
       {
@@ -81,5 +81,5 @@
       false
     ]
   },
-  "hash": "2cc9ee5a65e5d3ef8480c8be4aa11320acfac67c0d5f75152e0acc51c0cf7bad"
+  "hash": "1be73055b25447e587a6a5d31c2d013140fc95495c0a91f43857ef888896b973"
 }
