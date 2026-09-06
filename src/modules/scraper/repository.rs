@@ -388,9 +388,9 @@ impl ScraperRepository for PgScraperRepository {
             r#"
             INSERT INTO sessions (
                 subject, grp, starts_at, duration_min,
-                classroom, source, created_by
+                classroom, source, created_by, created_by_email
             )
-            VALUES ($1, $2, $3, $4, $5, 'manual', $6)
+            VALUES ($1, $2, $3, $4, $5, 'manual', $6, (SELECT email FROM users WHERE id = $6))
             ON CONFLICT (subject, grp, starts_at) DO NOTHING
             "#,
             subject,
