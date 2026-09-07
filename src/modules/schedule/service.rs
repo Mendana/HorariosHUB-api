@@ -14,6 +14,7 @@ use crate::{
     },
 };
 
+#[tracing::instrument(skip(user_repo, schedule_repo), fields(identifier = %identifier, start_time = %start_time))]
 pub async fn get_user_weekly_schedule(
     user_repo: &dyn UserRepository,
     schedule_repo: &dyn ScheduleRepository,
@@ -30,6 +31,7 @@ pub async fn get_user_weekly_schedule(
     })
 }
 
+#[tracing::instrument(skip(user_repo, schedule_repo), fields(identifier = %identifier, month = %month))]
 pub async fn get_user_monthly_schedule(
     user_repo: &dyn UserRepository,
     schedule_repo: &dyn ScheduleRepository,
@@ -53,6 +55,7 @@ pub async fn get_user_monthly_schedule(
     })
 }
 
+#[tracing::instrument(skip(user_repo, schedule_repo, to_user), fields(from_email = %from_email, to_user_id = %to_user.id))]
 pub async fn copy_schedule(
     user_repo: &dyn UserRepository,
     schedule_repo: &dyn ScheduleRepository,
@@ -86,6 +89,7 @@ pub async fn copy_schedule(
     })
 }
 
+#[tracing::instrument(skip(user_repo), fields(identifier = %identifier))]
 async fn resolve_user(user_repo: &dyn UserRepository, identifier: &str) -> Result<User, AppError> {
     if identifier.chars().count() < 6 {
         return Err(AppError::BadRequest(format!(

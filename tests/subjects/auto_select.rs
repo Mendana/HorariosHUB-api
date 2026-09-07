@@ -3,7 +3,7 @@ use crate::common::{login_as, setup, setup_with_scraper_url};
 use axum::http::StatusCode;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{method, path_regex},
+    matchers::{method, path, query_param},
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -315,8 +315,11 @@ async fn auto_select_background_actualiza_schedule_del_usuario() {
 
     // El scraper devuelve dos asignaturas
     Mock::given(method("POST"))
-        .and(path_regex(r"^/auto-select/uo\d{4,6}$"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("ALG,T.1\nFIS,P.2\n"))
+        .and(path("/groups"))
+        .and(query_param("uo", "uo333555"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("Subject,Group\nALG,T.1\nFIS,P.2\n"),
+        )
         .mount(&mock_server)
         .await;
 
@@ -358,8 +361,12 @@ async fn auto_select_background_marca_job_como_completed_con_conteo() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"^/auto-select/uo\d{4,6}$"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("ALG,T.1\nFIS,P.2\nQUI,L.1\n"))
+        .and(path("/groups"))
+        .and(query_param("uo", "uo444666"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("Subject,Group\nALG,T.1\nFIS,P.2\nQUI,L.1\n"),
+        )
         .mount(&mock_server)
         .await;
 
@@ -410,7 +417,8 @@ async fn auto_select_background_marca_job_como_failed_si_scraper_responde_500() 
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"^/auto-select/uo\d{4,6}$"))
+        .and(path("/groups"))
+        .and(query_param("uo", "uo555777"))
         .respond_with(ResponseTemplate::new(500).set_body_string("Internal scraper error"))
         .mount(&mock_server)
         .await;
@@ -474,8 +482,9 @@ async fn auto_select_background_reemplaza_schedule_existente() {
 
     // El scraper devuelve solo PROG/T.1 (MAT/T.1 no está)
     Mock::given(method("POST"))
-        .and(path_regex(r"^/auto-select/uo\d{4,6}$"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("PROG,T.1\n"))
+        .and(path("/groups"))
+        .and(query_param("uo", "uo777999"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("Subject,Group\nPROG,T.1\n"))
         .mount(&mock_server)
         .await;
 
@@ -667,8 +676,9 @@ async fn status_refleja_actualizacion_del_background() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"^/auto-select/uo\d{4,6}$"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("ALG,T.1\n"))
+        .and(path("/groups"))
+        .and(query_param("uo", "uo901241"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("Subject,Group\nALG,T.1\n"))
         .mount(&mock_server)
         .await;
 

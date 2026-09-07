@@ -24,6 +24,7 @@ use crate::services::email::service::EmailService;
 /// - [`AppError::InvalidEmailDomain`] si el email no pertenece al dominio `@uniovi.es`
 /// - [`AppError::Conflict`] si el email ya está registrado
 /// - [`AppError::Internal`] para errores en hashing o inserción en la base de datos
+#[tracing::instrument(skip(repo, email_svc, payload), fields(email = %payload.email))]
 pub async fn register(
     repo: &dyn UserRepository,
     email_svc: &dyn EmailService,
@@ -121,6 +122,7 @@ fn password_is_strong(password: &str) -> bool {
 /// - [`AppError::InvalidCredentials`] si el email no existe o la contraseña es incorrecta
 /// - [`AppError::EmailNotVerified`] si las credenciales son correctas pero el email no ha sido verificado
 /// - [`AppError::Internal`] para errores en verificación de contraseña o generación de token
+#[tracing::instrument(skip(repo, config, payload), fields(email = %payload.email))]
 pub async fn login(
     repo: &dyn UserRepository,
     config: &Config,
@@ -211,6 +213,7 @@ pub async fn login(
 /// - [`AppError::TokenInvalid`] si el token no existe o ya ha sido utilizado
 /// - [`AppError::TokenExpired`] si el token ha expirado
 /// - [`AppError::Internal`] para errores en la base de datos o en la lógica de verificación
+#[tracing::instrument(skip(repo, token))]
 pub async fn verify_email(
     repo: &dyn UserRepository,
     token: &str,
@@ -247,6 +250,7 @@ pub async fn verify_email(
 /// - [`AppError::TokenExpired`] si el token ha expirado
 /// - [`AppError::WeakPassword`] si la nueva contraseña no cumple los requisitos mínimos
 /// - [`AppError::Internal`] para errores en hashing o actualización en la base de datos
+#[tracing::instrument(skip(repo, payload))]
 pub async fn reset_password(
     repo: &dyn UserRepository,
     payload: ResetPasswordRequest,
@@ -324,6 +328,7 @@ pub async fn reset_password(
 ///
 /// # Errores:
 /// - [`AppError::Internal`] para errores en la base de datos o en el envío de emails
+#[tracing::instrument(skip(repo, email_svc, payload), fields(email = %payload.email))]
 pub async fn recover_password(
     repo: &dyn UserRepository,
     email_svc: &dyn EmailService,

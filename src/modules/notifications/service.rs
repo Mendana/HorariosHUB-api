@@ -25,6 +25,7 @@ use crate::{
 const DEFAULT_LIMIT: u32 = 20;
 const MAX_LIMIT: u32 = 50;
 
+#[tracing::instrument(skip(repo), fields(user_id = %user_id, read = ?read, page = ?page, limit = ?limit))]
 pub async fn get_notifications(
     repo: &dyn NotificationRepository,
     user_id: Uuid,
@@ -51,6 +52,7 @@ pub async fn get_notifications(
     })
 }
 
+#[tracing::instrument(skip(repo), fields(user_id = %user_id))]
 pub async fn get_unread_count(
     repo: &dyn NotificationRepository,
     user_id: Uuid,
@@ -69,6 +71,7 @@ pub async fn get_unread_count(
 /// # Errores
 /// - [`AppError::NotFound`] si la notificación no existe
 /// - [`AppError::Forbidden`] si la notificación pertenece a otro usuario
+#[tracing::instrument(skip(repo), fields(notification_id = %notification_id, user_id = %user_id))]
 pub async fn mark_notification_as_read(
     repo: &dyn NotificationRepository,
     notification_id: Uuid,
@@ -110,6 +113,7 @@ pub async fn mark_notification_as_read(
 ///
 /// # Errores
 /// - [`AppError::Internal`] si ocurre un error al actualizar la base de datos
+#[tracing::instrument(skip(repo), fields(user_id = %user_id))]
 pub async fn mark_all_notifications_as_read(
     repo: &dyn NotificationRepository,
     user_id: Uuid,
@@ -137,6 +141,7 @@ pub async fn mark_all_notifications_as_read(
 /// # Errores
 /// - [`AppError::NotFound`] si la notificación no existe
 /// - [`AppError::Forbidden`] si la notificación pertenece a otro usuario
+#[tracing::instrument(skip(repo), fields(notification_id = %notification_id, user_id = %user_id))]
 pub async fn delete_notification(
     repo: &dyn NotificationRepository,
     notification_id: Uuid,
@@ -216,6 +221,10 @@ struct NotificationContent<'a> {
     proposal_id: Option<Uuid>,
 }
 
+#[tracing::instrument(
+    skip(repo, email_queue, recipients, content),
+    fields(recipients = recipients.len(), notif_type = ?content.r#type)
+)]
 async fn persist_and_queue_emails(
     repo: &dyn NotificationRepository,
     email_queue: &EmailQueue,
@@ -260,6 +269,10 @@ async fn persist_and_queue_emails(
     );
 }
 
+#[tracing::instrument(
+    skip(repo, email_queue),
+    fields(session_id = %session_id, subject = %subject, grp = %grp, change_type = ?change_type)
+)]
 pub async fn notify_session_modified(
     repo: &dyn NotificationRepository,
     email_queue: &EmailQueue,
@@ -307,6 +320,10 @@ pub async fn notify_session_modified(
     .await;
 }
 
+#[tracing::instrument(
+    skip(repo, email_queue),
+    fields(session_id = %session_id, subject = %subject, grp = %grp, starts_at = %starts_at)
+)]
 pub async fn notify_exam_added(
     repo: &dyn NotificationRepository,
     email_queue: &EmailQueue,
@@ -344,6 +361,10 @@ pub async fn notify_exam_added(
     .await;
 }
 
+#[tracing::instrument(
+    skip(repo, email_queue),
+    fields(proposal_id = %proposal_id, proposed_by = %proposed_by, approved = %approved)
+)]
 pub async fn notify_proposal_status_changed(
     repo: &dyn NotificationRepository,
     email_queue: &EmailQueue,
@@ -392,6 +413,7 @@ pub async fn notify_proposal_status_changed(
     .await;
 }
 
+#[tracing::instrument(skip(repo, email_queue), fields(proposal_id = %proposal_id))]
 pub async fn notify_proposal_created(
     repo: &dyn NotificationRepository,
     email_queue: &EmailQueue,
@@ -426,6 +448,10 @@ pub async fn notify_proposal_created(
     .await;
 }
 
+#[tracing::instrument(
+    skip(repo, email_queue, conflict),
+    fields(subject = %conflict.subject, grp = %conflict.grp)
+)]
 pub async fn notify_scraper_conflict(
     repo: &dyn NotificationRepository,
     email_queue: &EmailQueue,

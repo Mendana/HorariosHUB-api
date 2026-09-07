@@ -162,6 +162,7 @@ impl PgUserRepository {
 
 #[async_trait::async_trait]
 impl UserRepository for PgUserRepository {
+    #[tracing::instrument(skip(self), fields(user_id = %id))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as!(
             User,
@@ -178,6 +179,7 @@ impl UserRepository for PgUserRepository {
         Ok(user)
     }
 
+    #[tracing::instrument(skip(self), fields(email = %email))]
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as!(
             User,
@@ -194,6 +196,7 @@ impl UserRepository for PgUserRepository {
         Ok(user)
     }
 
+    #[tracing::instrument(skip(self, password_hash), fields(email = %email, role = ?role))]
     async fn create(
         &self,
         email: &str,
@@ -222,6 +225,7 @@ impl UserRepository for PgUserRepository {
         Ok(user)
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn create_verification_token(&self, user_id: uuid::Uuid) -> Result<String, AppError> {
         // Verificar que el usuario existe y no está verificado
         let user = sqlx::query!("SELECT verified FROM users WHERE id = $1", user_id)
@@ -250,6 +254,7 @@ impl UserRepository for PgUserRepository {
         Ok(token)
     }
 
+    #[tracing::instrument(skip(self, token))]
     async fn find_verification_token(
         &self,
         token: &str,
@@ -269,6 +274,7 @@ impl UserRepository for PgUserRepository {
         Ok(record)
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn mark_user_as_verified(&self, user_id: uuid::Uuid) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -284,6 +290,7 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(token_id = %token_id))]
     async fn delete_verification_token(&self, token_id: uuid::Uuid) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -298,6 +305,7 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn create_password_reset_token(&self, user_id: uuid::Uuid) -> Result<String, AppError> {
         // Invalidar tokens anteriores del mismo usuario
         sqlx::query!(
@@ -323,6 +331,7 @@ impl UserRepository for PgUserRepository {
         Ok(token)
     }
 
+    #[tracing::instrument(skip(self, token))]
     async fn find_password_reset_token(
         &self,
         token: &str,
@@ -342,6 +351,7 @@ impl UserRepository for PgUserRepository {
         Ok(record)
     }
 
+    #[tracing::instrument(skip(self, new_password_hash), fields(user_id = %user_id))]
     async fn update_password(
         &self,
         user_id: uuid::Uuid,
@@ -358,6 +368,7 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(token_id = %token_id))]
     async fn delete_password_reset_token(&self, token_id: uuid::Uuid) -> Result<(), AppError> {
         sqlx::query!("DELETE FROM password_reset_tokens WHERE id = $1", token_id)
             .execute(&self.pool)
@@ -366,6 +377,7 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
         let users = sqlx::query_as!(
             User,
@@ -380,6 +392,7 @@ impl UserRepository for PgUserRepository {
         Ok(users)
     }
 
+    #[tracing::instrument(skip(self), fields(identifier = %identifier, new_role = ?new_role))]
     async fn change_user_role(&self, identifier: Uuid, new_role: UserRole) -> Result<(), AppError> {
         let result = sqlx::query!(
             r#"
@@ -400,6 +413,7 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(identifier = %identifier))]
     async fn delete_user(&self, identifier: Uuid) -> Result<(), AppError> {
         let result = sqlx::query!("DELETE FROM users WHERE id = $1", identifier)
             .execute(&self.pool)
@@ -412,6 +426,7 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id))]
     async fn get_notification_preferences(
         &self,
         user_id: Uuid,
@@ -426,6 +441,7 @@ impl UserRepository for PgUserRepository {
         Ok(row.map(|r| (r.notify_in_app, r.notify_email)))
     }
 
+    #[tracing::instrument(skip(self), fields(user_id = %user_id, notify_in_app = %notify_in_app, notify_email = %notify_email))]
     async fn update_notification_preferences(
         &self,
         user_id: Uuid,

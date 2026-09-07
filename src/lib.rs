@@ -11,11 +11,18 @@ pub mod utils;
 
 use axum::Router;
 use axum::http::{HeaderValue, Method, header};
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_otlp::WithExportConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    compression::CompressionLayer,
+    cors::CorsLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
+};
 use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -57,18 +64,48 @@ pub async fn run() -> anyhow::Result<()> {
     let config = config::Config::load()?;
 
     // 2. Configurar logging según entorno
-    let fmt_layer = if config.is_production() {
+    // LOG_FORMAT=json permite forzar salida JSON en desarrollo (p.ej. para
+    // que Promtail/Loki puedan parsear los logs correctamente).
+    let json_logs = config.is_production()
+        || std::env::var("LOG_FORMAT").is_ok_and(|v| v.eq_ignore_ascii_case("json"));
+    let fmt_layer = if json_logs {
         tracing_subscriber::fmt::layer().json().boxed()
     } else {
         tracing_subscriber::fmt::layer().pretty().boxed()
     };
 
+    let otel_layer = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .ok()
+        .filter(|endpoint| !endpoint.is_empty())
+        .map(|endpoint| {
+            let exporter = opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(endpoint)
+                .build()
+                .expect("no se pudo construir el exportador OTLP");
+
+            let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+                .with_batch_exporter(exporter)
+                .with_resource(
+                    opentelemetry_sdk::Resource::builder()
+                        .with_service_name("horarioshub-api")
+                        .build(),
+                )
+                .build();
+
+            let tracer = provider.tracer("horarioshub-api");
+            opentelemetry::global::set_tracer_provider(provider);
+
+            tracing_opentelemetry::layer().with_tracer(tracer)
+        });
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "pceo_backend=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "horarioshub_api=debug,tower_http=debug".into()),
         )
         .with(fmt_layer)
+        .with(otel_layer)
         .init();
 
     // 3. Pool de base de datos
@@ -143,8 +180,24 @@ pub async fn run() -> anyhow::Result<()> {
 
     let app = Router::new()
         .merge(modules::routes(true))
+        .layer(PropagateRequestIdLayer::x_request_id())
         .layer(axum::middleware::from_fn(metrics::track_http_metrics))
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
+                let request_id = req
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("unknown");
+                tracing::info_span!(
+                    "request",
+                    method = %req.method(),
+                    uri = %req.uri(),
+                    request_id = %request_id,
+                )
+            }),
+        )
+        .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(CompressionLayer::new())
         .layer(cors)
         .with_state(state);

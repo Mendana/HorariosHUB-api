@@ -30,8 +30,12 @@ services:
       dockerfile: docker/backend.dev.Dockerfile
     env_file:
       - .env
+    environment:
+      LOG_FORMAT: ${LOG_FORMAT:-pretty}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "3001:3001"
+      - "9090:9090" # métricas Prometheus (/metrics)
     volumes:
       - .:/app
       - cargo_cache:/usr/local/cargo
@@ -44,6 +48,77 @@ services:
     networks:
       - internal
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus
+    ports:
+      - "9091:9090"
+    networks:
+      - internal
+
+  loki:
+    image: grafana/loki:2.9.8
+    profiles: ["observability"]
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_dev_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - internal
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    profiles: ["observability"]
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    networks:
+      - internal
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: ["observability"]
+    user: "0:0"
+    command: -config.file=/etc/tempo/tempo.yaml
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_dev_data:/tmp/tempo
+    ports:
+      - "3200:3200" # API HTTP (datasource de Grafana)
+      - "4317:4317" # OTLP gRPC (recibe las trazas del backend)
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_dev_data:/var/lib/grafana
+    ports:
+      - "3300:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - internal
+
 networks:
   internal:
     driver: bridge
@@ -52,3 +127,7 @@ volumes:
   postgres_dev_data:
   cargo_cache:
   target_cache:
+  prometheus_dev_data:
+  loki_dev_data:
+  grafana_dev_data:
+  tempo_dev_data:

@@ -121,6 +121,7 @@ impl PgClassRepository {
 
 #[async_trait::async_trait]
 impl ClassRepository for PgClassRepository {
+    #[tracing::instrument(skip(self), fields(subject = %subject, grp = %grp))]
     async fn upsert_subject_group(&self, subject: &str, grp: &str) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -137,6 +138,7 @@ impl ClassRepository for PgClassRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, classroom), fields(subject = %subject, grp = %grp, created_by = %created_by))]
     async fn create_session(
         &self,
         subject: &str,
@@ -157,10 +159,11 @@ impl ClassRepository for PgClassRepository {
                 classroom,
                 source,
                 created_by,
+                created_by_email,
                 is_overridden,
                 scraped_at
             )
-            VALUES ($1, $2, $3, $4, $5, 'manual', $6, false, NULL)
+            VALUES ($1, $2, $3, $4, $5, 'manual', $6, (SELECT email FROM users WHERE id = $6), false, NULL)
             RETURNING
                 id,
                 subject,
@@ -185,6 +188,7 @@ impl ClassRepository for PgClassRepository {
         Ok(session)
     }
 
+    #[tracing::instrument(skip(self), fields(session_id = %id))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Session>, AppError> {
         let session = sqlx::query_as!(
             Session,
@@ -210,6 +214,7 @@ impl ClassRepository for PgClassRepository {
         Ok(session)
     }
 
+    #[tracing::instrument(skip(self, subject, grp, starts_at, duration_min, classroom), fields(session_id = %id))]
     async fn update_session(
         &self,
         id: Uuid,
@@ -255,6 +260,7 @@ impl ClassRepository for PgClassRepository {
         Ok(session)
     }
 
+    #[tracing::instrument(skip(self), fields(session_id = %id))]
     async fn delete_session(&self, id: Uuid) -> Result<(), AppError> {
         sqlx::query!(
             r#"
@@ -269,6 +275,7 @@ impl ClassRepository for PgClassRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, starts_at), fields(subject = %subject, grp = %grp))]
     async fn find_by_natural_key(
         &self,
         subject: &str,
@@ -290,6 +297,7 @@ impl ClassRepository for PgClassRepository {
         Ok(id)
     }
 
+    #[tracing::instrument(skip(self), fields(group_id = %id))]
     async fn find_subject_group_by_id(
         &self,
         id: Uuid,
@@ -301,6 +309,7 @@ impl ClassRepository for PgClassRepository {
         Ok(row.map(|r| (r.subject, r.grp)))
     }
 
+    #[tracing::instrument(skip(self, params))]
     async fn list_sessions(
         &self,
         params: ListSessionsParams<'_>,

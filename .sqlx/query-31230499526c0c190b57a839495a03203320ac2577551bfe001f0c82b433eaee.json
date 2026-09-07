@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO schedule (user_id, subject, grp)\n        SELECT $1, subject, grp\n        FROM schedule\n        WHERE user_id = $2\n        ON CONFLICT (user_id, subject, grp) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31230499526c0c190b57a839495a03203320ac2577551bfe001f0c82b433eaee"
+}

@@ -16,6 +16,7 @@ use crate::{
     },
 };
 
+#[tracing::instrument(fields(scraper_url = %scraper_url))]
 pub async fn fetch_csv_from_scraper(scraper_url: &str) -> Result<String, AppError> {
     tracing::info!(url = scraper_url, "Llamando al servicio del scraper");
 
@@ -59,6 +60,10 @@ pub async fn fetch_csv_from_scraper(scraper_url: &str) -> Result<String, AppErro
 /// 5. Aplicar cambios aprobados
 /// 6. Archivar rejected y pending huérfanos
 /// 7. Liberar lock
+#[tracing::instrument(
+    skip(repo, notifications_repo, email_queue, scraper_url),
+    fields(min_sessions = %min_sessions, hostname = %hostname)
+)]
 pub async fn run_sync(
     repo: &dyn ScraperRepository,
     notifications_repo: &dyn NotificationRepository,
@@ -96,6 +101,10 @@ pub async fn run_sync(
     result
 }
 
+#[tracing::instrument(
+    skip(repo, notifications_repo, email_queue, scraper_url),
+    fields(min_sessions = %min_sessions)
+)]
 async fn run_sync_inner(
     repo: &dyn ScraperRepository,
     notifications_repo: &dyn NotificationRepository,
@@ -187,6 +196,7 @@ async fn run_sync_inner(
     Ok(result)
 }
 
+#[tracing::instrument(skip(repo, change, result), fields(change_id = %change.id))]
 async fn apply_create(
     repo: &dyn ScraperRepository,
     change: &ApprovedChange,
@@ -233,6 +243,10 @@ async fn apply_create(
     Ok(())
 }
 
+#[tracing::instrument(
+    skip(repo, notifications_repo, email_queue, change, result),
+    fields(change_id = %change.id)
+)]
 async fn apply_modify(
     repo: &dyn ScraperRepository,
     notifications_repo: &dyn NotificationRepository,
@@ -297,6 +311,10 @@ async fn apply_modify(
     Ok(())
 }
 
+#[tracing::instrument(
+    skip(repo, notifications_repo, email_queue, change, result),
+    fields(change_id = %change.id)
+)]
 async fn apply_delete(
     repo: &dyn ScraperRepository,
     notifications_repo: &dyn NotificationRepository,
