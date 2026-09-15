@@ -4,6 +4,8 @@ mod common;
 mod approve;
 #[path = "proposals/create.rs"]
 mod create;
+#[path = "proposals/history.rs"]
+mod history;
 #[path = "proposals/list.rs"]
 mod list;
 #[path = "proposals/mine.rs"]

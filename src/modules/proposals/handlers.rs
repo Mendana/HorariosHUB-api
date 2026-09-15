@@ -14,8 +14,8 @@ use crate::{
         proposals::{
             models::{
                 ApproveProposalResponse, CreateProposalRequest, CreateProposalResponse,
-                ListMineProposalsQuery, ListProposalsQuery, ListProposalsResponse,
-                RejectProposalResponse,
+                ListHistoryQuery, ListHistoryResponse, ListMineProposalsQuery,
+                ListProposalsQuery, ListProposalsResponse, RejectProposalResponse,
             },
             service,
         },
@@ -116,6 +116,28 @@ pub async fn list_my_proposals(
     let response = service::list_my_proposals(
         state.proposals_repo.as_ref(),
         user_id,
+        params.page.unwrap_or(1),
+        params.limit.unwrap_or(10),
+    )
+    .await?;
+
+    Ok((StatusCode::OK, Json(response)))
+}
+
+/// GET /proposals/history?status=approved&page=1&limit=10
+///
+/// Devuelve una lista paginada del histórico de cambios ya resueltos
+/// (aprobados o rechazados), tanto los que siguen vigentes como los que
+/// ya fueron archivados por una sincronización del scraper.
+#[tracing::instrument(skip(state, professor), fields(user_id = %professor.id, user_email = %professor.email))]
+pub async fn list_history(
+    State(state): State<AppState>,
+    ProfessorOrAbove(professor): ProfessorOrAbove,
+    Query(params): Query<ListHistoryQuery>,
+) -> ApiResult<(StatusCode, Json<ListHistoryResponse>)> {
+    let response = service::list_history(
+        state.proposals_repo.as_ref(),
+        params.status,
         params.page.unwrap_or(1),
         params.limit.unwrap_or(10),
     )
