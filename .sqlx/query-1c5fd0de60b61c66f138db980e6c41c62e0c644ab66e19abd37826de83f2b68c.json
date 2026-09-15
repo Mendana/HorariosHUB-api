@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subject_groups (subject, grp) VALUES ('ALG', 'T.1'), ('FIS', 'P.2'), ('QUI', 'L.1') ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "1c5fd0de60b61c66f138db980e6c41c62e0c644ab66e19abd37826de83f2b68c"
+}

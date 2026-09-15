@@ -102,7 +102,7 @@ pub async fn register(
     })
 }
 
-fn password_is_strong(password: &str) -> bool {
+pub(crate) fn password_is_strong(password: &str) -> bool {
     let has_min_length = password.len() >= 8;
     let has_uppercase = password.chars().any(|c| c.is_uppercase());
     let has_lowercase = password.chars().any(|c| c.is_lowercase());

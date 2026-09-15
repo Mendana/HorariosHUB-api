@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO auto_select_jobs (user_id, status, finished_at)\n        SELECT id, 'completed'::auto_select_job_status, NOW()\n        FROM users WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e284ce8df0b8417a4ad05a1239e9a27f00bc13868a528c0b9e298875d8d3f795"
+}

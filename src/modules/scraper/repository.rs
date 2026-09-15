@@ -30,6 +30,18 @@ pub trait ScraperRepository: Send + Sync {
     /// - `Err(e)`: Error al intentar liberar el lock (consulta a base de datos fallida, etc)
     async fn release_lock(&self) -> Result<(), AppError>;
 
+    /// Consulta si hay una sincronización en curso ahora mismo, sin intentar adquirir el lock.
+    ///
+    /// Un lock con más de 2 horas de antigüedad se considera caducado (proceso caído) y se
+    /// reporta como libre, con el mismo criterio que usa [`acquire_lock`](Self::acquire_lock)
+    /// para robarlo.
+    ///
+    /// # Returns
+    /// - `Ok(Some((locked_by, locked_at)))`: hay una sincronización en curso, lanzada por `locked_by` desde `locked_at`
+    /// - `Ok(None)`: no hay ninguna sincronización en curso
+    /// - `Err(e)`: Error de base de datos
+    async fn get_lock_status(&self) -> Result<Option<(String, DateTime<Utc>)>, AppError>;
+
     /// Elimina todas las sesiones de la base de datos
     ///
     /// # Returns
@@ -197,6 +209,21 @@ impl ScraperRepository for PgScraperRepository {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn get_lock_status(&self) -> Result<Option<(String, DateTime<Utc>)>, AppError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT locked_by, locked_at
+            FROM scraper_locks
+            WHERE id = 'scraper_run' AND locked_at >= NOW() - INTERVAL '2 hours'
+            "#
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| (r.locked_by, r.locked_at)))
     }
 
     #[tracing::instrument(skip(self))]

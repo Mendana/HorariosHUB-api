@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT locked_by, locked_at\n            FROM scraper_locks\n            WHERE id = 'scraper_run' AND locked_at >= NOW() - INTERVAL '2 hours'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locked_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "locked_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "49918e12dfddf8716ade8a8815bad956ec60f21427196ebf8cf7aa6989e800f0"
+}

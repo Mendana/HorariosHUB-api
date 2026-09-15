@@ -1,17 +1,18 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Multipart, Path, State},
     http::StatusCode,
 };
 
 use crate::{
     AppState,
-    errors::ApiResult,
+    errors::{ApiResult, AppError},
     modules::{
         auth::middleware::{AdminUser, AuthenticatedUser, ProfessorOrAbove},
         users::{
             models::{
-                NotificationPreferences, UpdateNotificationPreferencesRequest, UsersListResponse,
+                BulkImportResponse, NotificationPreferences,
+                UpdateNotificationPreferencesRequest, UsersListResponse,
             },
             service,
         },
@@ -60,6 +61,54 @@ pub async fn delete_user(
     service::delete_user(state.user_repo.as_ref(), &identifier).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// POST /users/import
+///
+/// Sube un CSV (`email,password`) con cuentas "default" (p.ej. `infprimero`, `matsegundo`)
+/// y las crea ya verificadas, ignorando las que ya existan.
+#[tracing::instrument(
+    name = "Import default users",
+    skip(state, admin, multipart),
+    fields(user_email = %admin.email, user_role = ?admin.role)
+)]
+pub async fn import_default_users(
+    State(state): State<AppState>,
+    AdminUser(admin): AdminUser,
+    mut multipart: Multipart,
+) -> ApiResult<Json<BulkImportResponse>> {
+    let mut csv_content: Option<String> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Multipart inválido: {e}")))?
+    {
+        if field.name() != Some("file") {
+            continue;
+        }
+
+        let bytes = field
+            .bytes()
+            .await
+            .map_err(|e| AppError::BadRequest(format!("No se pudo leer el archivo: {e}")))?;
+
+        csv_content = Some(
+            String::from_utf8(bytes.to_vec())
+                .map_err(|_| AppError::BadRequest("El archivo no es UTF-8 válido".into()))?,
+        );
+    }
+
+    let csv_content = csv_content
+        .ok_or_else(|| AppError::BadRequest("Falta el campo 'file' con el CSV".into()))?;
+
+    if csv_content.trim().is_empty() {
+        return Err(AppError::BadRequest("El archivo está vacío".into()));
+    }
+
+    let response = service::bulk_import_users(state.user_repo.as_ref(), &csv_content).await?;
+
+    Ok(Json(response))
 }
 
 /// GET /users/me/notification-preferences

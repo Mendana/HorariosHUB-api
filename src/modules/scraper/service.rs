@@ -9,7 +9,7 @@ use crate::{
         },
         proposals::models::ChangeType,
         scraper::{
-            models::{ApprovedChange, SyncResult},
+            models::{ApprovedChange, SyncResult, SyncStatusResponse},
             parser::parse_csv,
             repository::ScraperRepository,
         },
@@ -48,6 +48,28 @@ pub async fn fetch_csv_from_scraper(scraper_url: &str) -> Result<String, AppErro
 
     tracing::info!(bytes = csv.len(), "CSV recibido del scraper");
     Ok(csv)
+}
+
+/// Consulta si hay una sincronización en curso ahora mismo, sin lanzar ninguna.
+///
+/// # Errores:
+/// - [`AppError::Internal`] / [`AppError::Database`] para errores en la consulta a la base de datos
+#[tracing::instrument(skip(repo))]
+pub async fn get_sync_status(repo: &dyn ScraperRepository) -> Result<SyncStatusResponse, AppError> {
+    let lock = repo.get_lock_status().await?;
+
+    Ok(match lock {
+        Some((locked_by, locked_at)) => SyncStatusResponse {
+            syncing: true,
+            locked_by: Some(locked_by),
+            locked_since: Some(locked_at),
+        },
+        None => SyncStatusResponse {
+            syncing: false,
+            locked_by: None,
+            locked_since: None,
+        },
+    })
 }
 
 /// Algoritmo completo de sincronización.
