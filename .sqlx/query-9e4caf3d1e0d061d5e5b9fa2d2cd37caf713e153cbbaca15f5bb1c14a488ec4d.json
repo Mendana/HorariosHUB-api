@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE verification_tokens SET expires_at = NOW() - INTERVAL '1 hour'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9e4caf3d1e0d061d5e5b9fa2d2cd37caf713e153cbbaca15f5bb1c14a488ec4d"
+}

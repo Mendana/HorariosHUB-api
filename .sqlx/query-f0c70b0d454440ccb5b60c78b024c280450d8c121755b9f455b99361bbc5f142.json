@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO schedule (user_id, subject, grp) SELECT id, 'MAT', 'T.1' FROM users WHERE email = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0c70b0d454440ccb5b60c78b024c280450d8c121755b9f455b99361bbc5f142"
+}

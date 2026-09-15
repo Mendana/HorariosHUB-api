@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT duration_min, classroom\n        FROM sessions\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "duration_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "classroom",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "d5d3ca5c513a51f38d9c9bd9f56bf7f04cc3fdc1ce81b02ede184ad15ff41203"
+}

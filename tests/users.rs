@@ -6,3 +6,5 @@ mod change_role;
 mod delete;
 #[path = "users/get_all.rs"]
 mod get_all;
+#[path = "users/import.rs"]
+mod import;

@@ -2,13 +2,21 @@ use uuid::Uuid;
 
 use crate::{
     errors::AppError,
-    modules::users::{
-        models::{
-            NotificationPreferences, UpdateNotificationPreferencesRequest, UserPublic, UserRole,
+    modules::{
+        auth::service::password_is_strong,
+        users::{
+            models::{
+                BulkImportResponse, BulkImportRow, BulkImportRowResult, BulkImportRowStatus,
+                NotificationPreferences, UpdateNotificationPreferencesRequest, UserPublic,
+                UserRole,
+            },
+            repository::UserRepository,
         },
-        repository::UserRepository,
     },
 };
+
+/// Límite de filas por archivo en `POST /users/import`, para evitar subidas abusivas
+const MAX_BULK_IMPORT_ROWS: usize = 500;
 
 #[tracing::instrument(skip(repo))]
 pub async fn get_all_users(repo: &dyn UserRepository) -> Result<Vec<UserPublic>, AppError> {
@@ -143,6 +151,131 @@ pub async fn update_notification_preferences(
     Ok(NotificationPreferences {
         in_app: new_in_app,
         email: new_email,
+    })
+}
+
+/// Importa en bloque usuarios "default" (cuentas pseudo-generadas como `infprimero`, `matsegundo`, etc.)
+/// a partir de un CSV con columnas `email,password`.
+///
+/// # Flujo:
+/// 1. Parsea el CSV fila a fila
+/// 2. Por cada fila: valida email/contraseña, comprueba si el email ya existe (si existe, se ignora)
+///    y si no, crea el usuario con rol `Student` y lo marca como verificado directamente
+/// 3. Nunca aborta por errores de una fila individual: los acumula en `details` y continúa
+///
+/// # Errores:
+/// - [`AppError::BadRequest`] si el archivo supera [`MAX_BULK_IMPORT_ROWS`] filas
+/// - [`AppError::Internal`] para errores en hashing o inserción en la base de datos
+#[tracing::instrument(skip(repo, csv_content))]
+pub async fn bulk_import_users(
+    repo: &dyn UserRepository,
+    csv_content: &str,
+) -> Result<BulkImportResponse, AppError> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .trim(csv::Trim::All)
+        .from_reader(csv_content.as_bytes());
+
+    let mut details = Vec::new();
+    let mut created = 0usize;
+    let mut skipped = 0usize;
+    let mut failed = 0usize;
+
+    for (i, result) in reader.deserialize::<BulkImportRow>().enumerate() {
+        if details.len() >= MAX_BULK_IMPORT_ROWS {
+            tracing::warn!(
+                max_rows = MAX_BULK_IMPORT_ROWS,
+                "Importación masiva rechazada por exceder el máximo de filas"
+            );
+            return Err(AppError::BadRequest(format!(
+                "El archivo supera el máximo de {MAX_BULK_IMPORT_ROWS} filas"
+            )));
+        }
+
+        let line = i + 2;
+        let row = match result {
+            Ok(row) => row,
+            Err(e) => {
+                failed += 1;
+                details.push(BulkImportRowResult {
+                    email: format!("fila {line}"),
+                    status: BulkImportRowStatus::Error,
+                    reason: Some(format!("CSV malformado: {e}")),
+                });
+                continue;
+            }
+        };
+
+        let email = row.email.trim().to_lowercase();
+
+        if email.is_empty() || !email.contains('@') {
+            failed += 1;
+            details.push(BulkImportRowResult {
+                email: row.email.clone(),
+                status: BulkImportRowStatus::Error,
+                reason: Some("Email inválido".into()),
+            });
+            continue;
+        }
+
+        if !password_is_strong(&row.password) {
+            failed += 1;
+            details.push(BulkImportRowResult {
+                email,
+                status: BulkImportRowStatus::Error,
+                reason: Some(
+                    "La contraseña debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas y números"
+                        .into(),
+                ),
+            });
+            continue;
+        }
+
+        if repo.find_by_email(&email).await?.is_some() {
+            tracing::debug!(email = %email, "Usuario ya existe, se ignora en la importación masiva");
+            skipped += 1;
+            details.push(BulkImportRowResult {
+                email,
+                status: BulkImportRowStatus::Skipped,
+                reason: Some("El usuario ya existe".into()),
+            });
+            continue;
+        }
+
+        let password = row.password.clone();
+        let password_hash =
+            tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|e| AppError::Internal(e.into()))?
+                .map_err(|e| AppError::Internal(e.into()))?;
+
+        let user = repo
+            .create(&email, &password_hash, UserRole::Student)
+            .await?;
+        repo.mark_user_as_verified(user.id).await?;
+
+        created += 1;
+        details.push(BulkImportRowResult {
+            email,
+            status: BulkImportRowStatus::Created,
+            reason: None,
+        });
+    }
+
+    tracing::info!(
+        total = details.len(),
+        created,
+        skipped,
+        failed,
+        "Importación masiva de usuarios default completada"
+    );
+
+    Ok(BulkImportResponse {
+        total: details.len(),
+        created,
+        skipped,
+        failed,
+        details,
     })
 }
 
@@ -419,6 +552,155 @@ mod tests {
         let id = Uuid::new_v4().to_string();
         let result = change_user_role(&repo, &id, "admin").await;
         assert!(matches!(result, Err(AppError::NotFound)));
+    }
+
+    // ─── bulk_import_users ────────────────────────────────────────────────────
+
+    struct MockBulkImportRepository {
+        existing_emails: Vec<String>,
+    }
+
+    #[async_trait]
+    impl UserRepository for MockBulkImportRepository {
+        async fn find_by_id(&self, _id: Uuid) -> Result<Option<User>, AppError> {
+            Ok(None)
+        }
+        async fn find_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
+            if self.existing_emails.iter().any(|e| e == email) {
+                Ok(Some(User {
+                    id: Uuid::new_v4(),
+                    email: email.to_string(),
+                    password_hash: "hash".into(),
+                    role: UserRole::Student,
+                    verified: true,
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+        async fn create(&self, email: &str, _hash: &str, role: UserRole) -> Result<User, AppError> {
+            Ok(User {
+                id: Uuid::new_v4(),
+                email: email.to_string(),
+                password_hash: "hash".into(),
+                role,
+                verified: false,
+            })
+        }
+        async fn create_verification_token(&self, _: Uuid) -> Result<String, AppError> {
+            unimplemented!()
+        }
+        async fn find_verification_token(
+            &self,
+            _: &str,
+        ) -> Result<Option<VerificationToken>, AppError> {
+            unimplemented!()
+        }
+        async fn mark_user_as_verified(&self, _: Uuid) -> Result<(), AppError> {
+            Ok(())
+        }
+        async fn delete_verification_token(&self, _: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn create_password_reset_token(&self, _: Uuid) -> Result<String, AppError> {
+            unimplemented!()
+        }
+        async fn find_password_reset_token(
+            &self,
+            _: &str,
+        ) -> Result<Option<PasswordResetToken>, AppError> {
+            unimplemented!()
+        }
+        async fn update_password(&self, _: Uuid, _: &str) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn delete_password_reset_token(&self, _: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+            unimplemented!()
+        }
+        async fn change_user_role(&self, _: Uuid, _: UserRole) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn delete_user(&self, _: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+        async fn get_notification_preferences(
+            &self,
+            _: Uuid,
+        ) -> Result<Option<(bool, bool)>, AppError> {
+            unimplemented!()
+        }
+        async fn update_notification_preferences(
+            &self,
+            _: Uuid,
+            _: bool,
+            _: bool,
+        ) -> Result<(), AppError> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn bulk_import_crea_nuevos_y_omite_existentes() {
+        let repo = MockBulkImportRepository {
+            existing_emails: vec!["infprimero@uniovi.es".to_string()],
+        };
+        let csv = "email,password\n\
+                   infprimero@uniovi.es,Password123\n\
+                   matprimero@uniovi.es,Password123\n";
+
+        let result = bulk_import_users(&repo, csv).await.unwrap();
+
+        assert_eq!(result.total, 2);
+        assert_eq!(result.created, 1);
+        assert_eq!(result.skipped, 1);
+        assert_eq!(result.failed, 0);
+        assert_eq!(result.details[0].status, BulkImportRowStatus::Skipped);
+        assert_eq!(result.details[1].status, BulkImportRowStatus::Created);
+    }
+
+    #[tokio::test]
+    async fn bulk_import_marca_error_en_contrasena_debil() {
+        let repo = MockBulkImportRepository {
+            existing_emails: vec![],
+        };
+        let csv = "email,password\nmatprimero@uniovi.es,weak\n";
+
+        let result = bulk_import_users(&repo, csv).await.unwrap();
+
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.created, 0);
+        assert_eq!(result.details[0].status, BulkImportRowStatus::Error);
+    }
+
+    #[tokio::test]
+    async fn bulk_import_marca_error_en_fila_malformada() {
+        let repo = MockBulkImportRepository {
+            existing_emails: vec![],
+        };
+        // Falta la columna "password"
+        let csv = "email,password\nmatprimero@uniovi.es\n";
+
+        let result = bulk_import_users(&repo, csv).await.unwrap();
+
+        assert_eq!(result.total, 1);
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.details[0].status, BulkImportRowStatus::Error);
+    }
+
+    #[tokio::test]
+    async fn bulk_import_normaliza_email_a_minusculas() {
+        let repo = MockBulkImportRepository {
+            existing_emails: vec![],
+        };
+        let csv = "email,password\nINFPRIMERO@UNIOVI.ES,Password123\n";
+
+        let result = bulk_import_users(&repo, csv).await.unwrap();
+
+        assert_eq!(result.details[0].email, "infprimero@uniovi.es");
+        assert_eq!(result.created, 1);
     }
 
     // ─── delete_user ──────────────────────────────────────────────────────────

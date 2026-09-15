@@ -29,6 +29,40 @@ pub struct UpdateNotificationPreferencesRequest {
     pub email: Option<bool>,
 }
 
+/// Fila del CSV de importación de usuarios default (`POST /users/import`)
+#[derive(Debug, Deserialize)]
+pub struct BulkImportRow {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum BulkImportRowStatus {
+    Created,
+    Skipped,
+    Error,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkImportRowResult {
+    pub email: String,
+    pub status: BulkImportRowStatus,
+    pub reason: Option<String>,
+}
+
+/// Respuesta de `POST /users/import`
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkImportResponse {
+    pub total: usize,
+    pub created: usize,
+    pub skipped: usize,
+    pub failed: usize,
+    pub details: Vec<BulkImportRowResult>,
+}
+
 // --- Modelos de base de datos ---
 
 /// Modelo de usuario para la base de datos
