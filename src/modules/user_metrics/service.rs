@@ -247,17 +247,21 @@ fn weekday_distribution(rows: &[&UserSessionRow]) -> (Vec<WeekdayStat>, Vec<u8>)
 }
 
 fn classify_session_type(grp: &str) -> SessionType {
-    let g = grp.to_uppercase();
-    if g.starts_with("T.") || g.starts_with("CE-") {
-        SessionType::Teoria
-    } else if g.starts_with("PL-") || g.starts_with("PL.") {
-        SessionType::Laboratorio
-    } else if g.starts_with("P-") || g.starts_with("P.") {
-        SessionType::Practica
-    } else if g.starts_with("TG-") || g.starts_with("TG.") {
-        SessionType::Tutoria
-    } else {
-        SessionType::Otros
+    // El prefijo alfabético identifica el tipo de sesión independientemente del
+    // separador usado ("T.1", "T-1", "T1") y del esquema de códigos de la
+    // titulación: mates (CE, PA, TG, PL) o informática (T, S, TG, L).
+    let prefix: String = grp
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .collect::<String>()
+        .to_uppercase();
+
+    match prefix.as_str() {
+        "T" | "CE" => SessionType::Teoria,
+        "PL" | "L" => SessionType::Laboratorio,
+        "P" | "PA" | "S" => SessionType::Practica,
+        "TG" => SessionType::Tutoria,
+        _ => SessionType::Otros,
     }
 }
 
@@ -437,6 +441,30 @@ mod tests {
         assert_eq!(classify_session_type("TG-1"), SessionType::Tutoria);
         assert_eq!(classify_session_type("TG.1"), SessionType::Tutoria);
         assert_eq!(classify_session_type("X.1"), SessionType::Otros);
+    }
+
+    #[test]
+    fn clasifica_codigos_de_mates_sin_separador() {
+        assert_eq!(classify_session_type("CE1"), SessionType::Teoria);
+        assert_eq!(classify_session_type("CE2"), SessionType::Teoria);
+        assert_eq!(classify_session_type("PA1"), SessionType::Practica);
+        assert_eq!(classify_session_type("PA2"), SessionType::Practica);
+        assert_eq!(classify_session_type("TG1"), SessionType::Tutoria);
+        assert_eq!(classify_session_type("TG2"), SessionType::Tutoria);
+        assert_eq!(classify_session_type("PL1"), SessionType::Laboratorio);
+        assert_eq!(classify_session_type("PL2"), SessionType::Laboratorio);
+    }
+
+    #[test]
+    fn clasifica_codigos_de_informatica() {
+        assert_eq!(classify_session_type("T.1"), SessionType::Teoria);
+        assert_eq!(classify_session_type("T.2"), SessionType::Teoria);
+        assert_eq!(classify_session_type("S.1"), SessionType::Practica);
+        assert_eq!(classify_session_type("S.2"), SessionType::Practica);
+        assert_eq!(classify_session_type("TG.1"), SessionType::Tutoria);
+        assert_eq!(classify_session_type("TG.2"), SessionType::Tutoria);
+        assert_eq!(classify_session_type("L.1"), SessionType::Laboratorio);
+        assert_eq!(classify_session_type("L.2"), SessionType::Laboratorio);
     }
 
     #[test]
