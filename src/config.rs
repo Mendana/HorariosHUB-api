@@ -19,6 +19,7 @@ pub struct Config {
     pub auto_select_max_concurrent: usize,
     pub allowed_origin: String,
     pub metrics_port: u16,
+    pub feedback_recipients: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +68,7 @@ impl Config {
             metrics_port: env::var("METRICS_PORT")
                 .unwrap_or_else(|_| "9090".into())
                 .parse()?,
+            feedback_recipients: required_list("FEEDBACK_RECIPIENTS")?,
         })
     }
 
@@ -77,4 +79,20 @@ impl Config {
 
 fn required(key: &str) -> anyhow::Result<String> {
     env::var(key).map_err(|_| anyhow::anyhow!("{key} es requerido pero no se encontro"))
+}
+
+/// Lee una lista separada por comas (p.ej. `a@x.com,b@x.com`). Recorta espacios
+/// y descarta entradas vacías. Falla si no queda ninguna entrada válida.
+fn required_list(key: &str) -> anyhow::Result<Vec<String>> {
+    let list: Vec<String> = required(key)?
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if list.is_empty() {
+        anyhow::bail!("{key} no contiene ninguna dirección válida");
+    }
+
+    Ok(list)
 }

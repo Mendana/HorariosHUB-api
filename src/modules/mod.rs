@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod classes;
+pub mod feedback;
 pub mod health;
 pub mod notifications;
 pub mod proposals;
@@ -24,4 +25,5 @@ pub fn routes(with_rate_limit: bool) -> Router<AppState> {
         .merge(health::routes())
         .merge(user_metrics::routes())
         .merge(notifications::routes())
+        .merge(feedback::routes(with_rate_limit))
 }

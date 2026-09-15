@@ -22,6 +22,14 @@ pub trait EmailService: Send + Sync {
         subject: &str,
         message: &str,
     ) -> Result<(), AppError>;
+    async fn send_feedback_email(
+        &self,
+        to: &str,
+        name: &str,
+        from_email: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), AppError>;
 }
 
 pub struct SmtpEmailService {
@@ -45,6 +53,16 @@ impl EmailService for MockEmailService {
         _to: &str,
         _subject: &str,
         _message: &str,
+    ) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn send_feedback_email(
+        &self,
+        _to: &str,
+        _name: &str,
+        _from_email: &str,
+        _subject: &str,
+        _body: &str,
     ) -> Result<(), AppError> {
         Ok(())
     }
@@ -124,6 +142,18 @@ impl EmailService for SmtpEmailService {
         message: &str,
     ) -> Result<(), AppError> {
         let html = template::notification_email(subject, message);
+        self.send_html(to, subject, &html).await
+    }
+
+    async fn send_feedback_email(
+        &self,
+        to: &str,
+        name: &str,
+        from_email: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), AppError> {
+        let html = template::feedback_email(name, from_email, subject, body);
         self.send_html(to, subject, &html).await
     }
 }

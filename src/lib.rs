@@ -330,6 +330,7 @@ pub async fn create_test_app_with_scraper(
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
             metrics_port: 9090,
+            feedback_recipients: vec!["admin-test@horarioshub.com".to_string()],
         }),
         auto_select_semaphore: Arc::new(Semaphore::new(5)),
     };
