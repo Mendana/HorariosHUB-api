@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT change_type::text, change_status::text, subject, grp FROM changes WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "change_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "change_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "grp",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "3cf8d0936b322bf81cc6c98ee757344da3f62512b568291b48d64f43677231b1"
+}
