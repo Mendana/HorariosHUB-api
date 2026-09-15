@@ -5,7 +5,10 @@ use crate::{
     errors::{ApiResult, AppError},
     modules::{
         auth::middleware::AdminUser,
-        scraper::{models::SyncResponse, service},
+        scraper::{
+            models::{SyncResponse, SyncStatusResponse},
+            service,
+        },
     },
 };
 
@@ -38,4 +41,18 @@ pub async fn trigger_sync(
     }
 
     Ok(Json(SyncResponse::from(result)))
+}
+
+///GET /scraper/sync/status
+///
+///Consulta si hay una sincronización en curso ahora mismo (lanzada manualmente o por el cronjob),
+///sin lanzar ninguna nueva.
+#[tracing::instrument(skip(state, admin), fields(user_id = %admin.id, user_email = %admin.email))]
+pub async fn get_sync_status(
+    State(state): State<AppState>,
+    AdminUser(admin): AdminUser,
+) -> ApiResult<Json<SyncStatusResponse>> {
+    let status = service::get_sync_status(state.scraper_repo.as_ref()).await?;
+
+    Ok(Json(status))
 }

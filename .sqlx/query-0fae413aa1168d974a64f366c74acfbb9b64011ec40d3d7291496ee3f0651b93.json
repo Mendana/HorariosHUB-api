@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO scraper_locks (id, locked_by, locked_at) VALUES ('scraper_run', 'cronjob', NOW())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0fae413aa1168d974a64f366c74acfbb9b64011ec40d3d7291496ee3f0651b93"
+}

@@ -83,6 +83,15 @@ pub struct SyncResponse {
     pub rejected_archived: usize,
 }
 
+/// Respuesta de `GET /scraper/sync/status`
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatusResponse {
+    pub syncing: bool,
+    pub locked_by: Option<String>,
+    pub locked_since: Option<DateTime<Utc>>,
+}
+
 impl From<SyncResult> for SyncResponse {
     fn from(r: SyncResult) -> Self {
         Self {
