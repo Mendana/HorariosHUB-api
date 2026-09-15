@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     modules::proposals::models::{
-        Change, ChangeStatus, ChangeType, ChangeWithAuthor, CreateChangeInput,
+        Change, ChangeHistoryRow, ChangeStatus, ChangeType, ChangeWithAuthor, CreateChangeInput,
     },
 };
 
@@ -44,6 +44,16 @@ pub trait ProposalRepository: Send + Sync {
         offset: u32,
         limit: u32,
     ) -> Result<(Vec<ChangeWithAuthor>, u32), AppError>;
+
+    /// Lista el histórico de cambios: la unión de `changes` (solo approved/rejected,
+    /// que todavía no han sido archivados) y `changes_history` (ya archivados),
+    /// ordenado por `COALESCE(archived_at, proposed_at)` descendente.
+    async fn list_history(
+        &self,
+        status: Option<ChangeStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<ChangeHistoryRow>, u32), AppError>;
 }
 
 pub struct PgProposalRepository {
@@ -323,5 +333,146 @@ impl ProposalRepository for PgProposalRepository {
         .unwrap_or(0) as u32;
 
         Ok((changes, total))
+    }
+
+    #[tracing::instrument(skip(self), fields(status = ?status, offset = %offset, limit = %limit))]
+    async fn list_history(
+        &self,
+        status: Option<ChangeStatus>,
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<ChangeHistoryRow>, u32), AppError> {
+        match status {
+            Some(s) => {
+                let rows = sqlx::query_as!(
+                    ChangeHistoryRow,
+                    r#"
+                    WITH combined AS (
+                        SELECT id, proposed_by, session_id, subject, grp,
+                               change_type, change_status,
+                               prev_starts_at, prev_duration, prev_classroom,
+                               new_starts_at, new_duration, new_classroom,
+                               proposed_at, NULL::timestamptz AS archived_at
+                        FROM changes
+                        WHERE change_status IN ('approved', 'rejected')
+                        UNION ALL
+                        SELECT id, proposed_by, session_id, subject, grp,
+                               change_type, change_status,
+                               prev_starts_at, prev_duration, prev_classroom,
+                               new_starts_at, new_duration, new_classroom,
+                               proposed_at, archived_at
+                        FROM changes_history
+                    )
+                    SELECT
+                        c.id AS "id!",
+                        c.proposed_by AS "proposed_by!",
+                        c.session_id,
+                        c.subject,
+                        c.grp,
+                        c.change_type AS "change_type!: ChangeType",
+                        c.change_status AS "change_status!: ChangeStatus",
+                        c.prev_starts_at,
+                        c.prev_duration,
+                        c.prev_classroom,
+                        c.new_starts_at,
+                        c.new_duration,
+                        c.new_classroom,
+                        c.proposed_at AS "proposed_at!",
+                        c.archived_at,
+                        u.email AS "author_email!"
+                    FROM combined c
+                    JOIN users u ON u.id = c.proposed_by
+                    WHERE c.change_status = $1
+                    ORDER BY COALESCE(c.archived_at, c.proposed_at) DESC
+                    OFFSET $2
+                    LIMIT $3
+                    "#,
+                    s.clone() as ChangeStatus,
+                    offset as i64,
+                    limit as i64
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                let total = sqlx::query_scalar!(
+                    r#"
+                    SELECT (
+                        (SELECT COUNT(*) FROM changes WHERE change_status = $1)
+                        + (SELECT COUNT(*) FROM changes_history WHERE change_status = $1)
+                    )
+                    "#,
+                    s as ChangeStatus
+                )
+                .fetch_one(&self.pool)
+                .await?
+                .unwrap_or(0) as u32;
+
+                Ok((rows, total))
+            }
+
+            None => {
+                let rows = sqlx::query_as!(
+                    ChangeHistoryRow,
+                    r#"
+                    WITH combined AS (
+                        SELECT id, proposed_by, session_id, subject, grp,
+                               change_type, change_status,
+                               prev_starts_at, prev_duration, prev_classroom,
+                               new_starts_at, new_duration, new_classroom,
+                               proposed_at, NULL::timestamptz AS archived_at
+                        FROM changes
+                        WHERE change_status IN ('approved', 'rejected')
+                        UNION ALL
+                        SELECT id, proposed_by, session_id, subject, grp,
+                               change_type, change_status,
+                               prev_starts_at, prev_duration, prev_classroom,
+                               new_starts_at, new_duration, new_classroom,
+                               proposed_at, archived_at
+                        FROM changes_history
+                    )
+                    SELECT
+                        c.id AS "id!",
+                        c.proposed_by AS "proposed_by!",
+                        c.session_id,
+                        c.subject,
+                        c.grp,
+                        c.change_type AS "change_type!: ChangeType",
+                        c.change_status AS "change_status!: ChangeStatus",
+                        c.prev_starts_at,
+                        c.prev_duration,
+                        c.prev_classroom,
+                        c.new_starts_at,
+                        c.new_duration,
+                        c.new_classroom,
+                        c.proposed_at AS "proposed_at!",
+                        c.archived_at,
+                        u.email AS "author_email!"
+                    FROM combined c
+                    JOIN users u ON u.id = c.proposed_by
+                    ORDER BY COALESCE(c.archived_at, c.proposed_at) DESC
+                    OFFSET $1
+                    LIMIT $2
+                    "#,
+                    offset as i64,
+                    limit as i64
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                let total = sqlx::query_scalar!(
+                    r#"
+                    SELECT (
+                        (SELECT COUNT(*) FROM changes WHERE change_status IN ('approved', 'rejected'))
+                        + (SELECT COUNT(*) FROM changes_history)
+                    )
+                    "#
+                )
+                .fetch_one(&self.pool)
+                .await?
+                .unwrap_or(0) as u32;
+
+                Ok((rows, total))
+            }
+        }
     }
 }
