@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT event_id, grp\n            FROM event_groups\n            WHERE event_id = ANY($1)\n            ORDER BY event_id, grp\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "grp",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "041e909be490d9dc57a0df164fdf92f8d9a5fc5a4cc3ad644b5dd9386b2888a4"
+}

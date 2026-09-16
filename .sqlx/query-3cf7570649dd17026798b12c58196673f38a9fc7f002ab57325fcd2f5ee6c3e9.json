@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT grp FROM event_groups WHERE event_id = $1 ORDER BY grp",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grp",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3cf7570649dd17026798b12c58196673f38a9fc7f002ab57325fcd2f5ee6c3e9"
+}
