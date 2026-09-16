@@ -356,6 +356,57 @@ async fn auto_select_background_actualiza_schedule_del_usuario() {
     );
 }
 
+/// Regresión: si el scraper de grupos de la UO devuelve una asignatura/grupo
+/// que todavía no existe en `subject_groups` (porque el otro scraper, el de
+/// sesiones, aún no lo ha traído), el job no debe fallar con una violación de
+/// la FK `schedule_subject_grp_fkey` — debe crear la pareja sobre la marcha.
+#[tokio::test]
+async fn auto_select_background_crea_subject_group_si_no_existe_todavia() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/groups"))
+        .and(query_param("uo", "uo777888"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("Subject,Group\nNUEVA_ASIG,T.1\n"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let ctx = setup_with_scraper_url(&mock_server.uri()).await;
+    let email = "uo777888@uniovi.es";
+    let token = login_as(&ctx, email, "student").await;
+
+    // Deliberadamente NO se pre-siembra `subject_groups`: este es justo el
+    // escenario que fallaba en producción.
+    let response = ctx
+        .server
+        .post("/subjects/auto-select")
+        .add_header("Authorization", format!("Bearer {token}"))
+        .await;
+
+    let job_id = extraer_job_id(&response.json::<serde_json::Value>());
+
+    esperar_status_job(&ctx.pool, job_id, "completed").await;
+
+    let grupos = grupos_en_schedule(&ctx.pool, email).await;
+    assert_eq!(grupos, vec![("NUEVA_ASIG".to_string(), "T.1".to_string())]);
+
+    let existe = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM subject_groups WHERE subject = $1 AND grp = $2",
+        "NUEVA_ASIG",
+        "T.1"
+    )
+    .fetch_one(&ctx.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        existe,
+        Some(1),
+        "subject_groups debe haberse creado automáticamente"
+    );
+}
+
 #[tokio::test]
 async fn auto_select_background_marca_job_como_completed_con_conteo() {
     let mock_server = MockServer::start().await;

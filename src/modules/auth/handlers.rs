@@ -39,6 +39,7 @@ pub async fn register(
 )]
 pub async fn get_user(auth: AuthenticatedUser) -> ApiResult<(StatusCode, Json<UserPublic>)> {
     let response = UserPublic {
+        id: auth.user.id,
         email: auth.user.email.clone(),
         role: auth.user.role.clone(),
     };
