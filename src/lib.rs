@@ -27,6 +27,7 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::modules::classes::repository::{ClassRepository, PgClassRepository};
+use crate::modules::events::repository::{EventRepository, PgEventRepository};
 use crate::modules::health::repository::{HealthRepository, PgHealthRepository};
 use crate::modules::notifications::repository::{NotificationRepository, PgNotificationRepository};
 use crate::modules::notifications::service::{EmailQueue, run_email_worker};
@@ -47,6 +48,7 @@ pub struct AppState {
     pub user_repo: Arc<dyn UserRepository>,
     pub schedule_repo: Arc<dyn ScheduleRepository>,
     pub class_repo: Arc<dyn ClassRepository>,
+    pub event_repo: Arc<dyn EventRepository>,
     pub proposals_repo: Arc<dyn ProposalRepository>,
     pub subjects_repo: Arc<dyn SubjectRepository>,
     pub scraper_repo: Arc<dyn ScraperRepository>,
@@ -148,6 +150,7 @@ pub async fn run() -> anyhow::Result<()> {
         health_repo: Arc::new(PgHealthRepository::new(pool.clone())),
         user_repo: Arc::new(PgUserRepository::new(pool.clone())),
         class_repo: Arc::new(PgClassRepository::new(pool.clone())),
+        event_repo: Arc::new(PgEventRepository::new(pool.clone())),
         proposals_repo: Arc::new(PgProposalRepository::new(pool.clone())),
         schedule_repo: Arc::new(PgScheduleRepository::new(pool.clone())),
         subjects_repo: Arc::new(PgSubjectRepository::new(pool.clone())),
@@ -290,6 +293,7 @@ pub async fn create_test_app_with_scraper(
     let pool = Arc::new(pool);
     let user_repo = Arc::new(PgUserRepository::new((*pool).clone()));
     let class_repo = Arc::new(PgClassRepository::new((*pool).clone()));
+    let event_repo = Arc::new(PgEventRepository::new((*pool).clone()));
     let proposals_repo = Arc::new(PgProposalRepository::new((*pool).clone()));
     let schedule_repo = Arc::new(PgScheduleRepository::new((*pool).clone()));
     let subject_repo = Arc::new(PgSubjectRepository::new((*pool).clone()));
@@ -304,6 +308,7 @@ pub async fn create_test_app_with_scraper(
         health_repo: Arc::new(PgHealthRepository::new((*pool).clone())),
         user_repo,
         class_repo,
+        event_repo,
         proposals_repo,
         schedule_repo,
         subjects_repo: subject_repo,
