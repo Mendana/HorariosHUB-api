@@ -131,6 +131,22 @@ impl SubjectRepository for PgSubjectRepository {
 
         let count = groups.len() as i32;
         for (subject, grp) in &groups {
+            // Los grupos vienen de una fuente externa (el scraper de grupos de la UO,
+            // distinto del scraper de sesiones), así que puede que `subject_groups`
+            // todavía no tenga esta pareja: hay que asegurarla antes de insertar en
+            // `schedule`, que tiene FK contra `subject_groups(subject, grp)`.
+            sqlx::query!(
+                r#"
+                INSERT INTO subject_groups (subject, grp)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                "#,
+                subject,
+                grp
+            )
+            .execute(&mut *tx)
+            .await?;
+
             sqlx::query!(
                 r#"
                 INSERT INTO schedule (user_id, subject, grp)
