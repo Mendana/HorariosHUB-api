@@ -759,6 +759,7 @@ mod tests {
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
             metrics_port: 9090,
+            feedback_recipients: vec!["admin-test@horarioshub.com".to_string()],
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -803,6 +804,7 @@ mod tests {
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
             metrics_port: 9090,
+            feedback_recipients: vec!["admin-test@horarioshub.com".to_string()],
         };
         let payload = LoginRequest {
             email: "otro@uniovi.es".to_string(),
@@ -844,6 +846,7 @@ mod tests {
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
             metrics_port: 9090,
+            feedback_recipients: vec!["admin-test@horarioshub.com".to_string()],
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -885,6 +888,7 @@ mod tests {
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
             metrics_port: 9090,
+            feedback_recipients: vec!["admin-test@horarioshub.com".to_string()],
         };
         let payload = LoginRequest {
             email: "diego@uniovi.es".to_string(),
@@ -1365,6 +1369,7 @@ mod tests {
             auto_select_max_concurrent: 5,
             allowed_origin: "http://localhost:3000".to_string(),
             metrics_port: 9090,
+            feedback_recipients: vec!["admin-test@horarioshub.com".to_string()],
         };
         let payload = LoginRequest {
             email: "DIEGO@UNIOVI.ES".to_string(),

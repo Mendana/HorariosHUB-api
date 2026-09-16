@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                event_id AS \"event_id!\",\n                title AS \"title!\",\n                description,\n                subject AS \"subject!\",\n                classroom,\n                occurrence_starts_at AS \"occurrence_starts_at!\",\n                duration_min AS \"duration_min!\",\n                is_recurring AS \"is_recurring!\"\n            FROM (\n                SELECT\n                    e.id AS event_id,\n                    e.title,\n                    e.description,\n                    e.subject,\n                    e.classroom,\n                    gs.occ AS occurrence_starts_at,\n                    e.duration_min,\n                    true AS is_recurring\n                FROM events e\n                CROSS JOIN LATERAL generate_series(\n                    e.starts_at,\n                    $2::timestamptz,\n                    CASE e.recurrence_interval\n                        WHEN 'daily' THEN INTERVAL '1 day'\n                        WHEN 'weekly' THEN INTERVAL '1 week'\n                        WHEN 'biweekly' THEN INTERVAL '2 weeks'\n                        WHEN 'monthly' THEN INTERVAL '1 month'\n                    END\n                ) AS gs(occ)\n                WHERE e.recurrence_interval IS NOT NULL\n                    AND gs.occ >= $1::timestamptz\n                    AND gs.occ < $2::timestamptz\n                    AND gs.occ < ((e.recurrence_end_date + 1)::timestamp AT TIME ZONE 'UTC')\n                    AND ($3::text IS NULL OR e.subject = $3)\n\n                UNION ALL\n\n                SELECT\n                    e.id AS event_id,\n                    e.title,\n                    e.description,\n                    e.subject,\n                    e.classroom,\n                    e.starts_at AS occurrence_starts_at,\n                    e.duration_min,\n                    false AS is_recurring\n                FROM events e\n                WHERE e.recurrence_interval IS NULL\n                    AND e.starts_at >= $1::timestamptz\n                    AND e.starts_at < $2::timestamptz\n                    AND ($3::text IS NULL OR e.subject = $3)\n            ) occurrences\n            ORDER BY occurrence_starts_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "occurrence_starts_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_min!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_recurring!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "03919b3b1e2c3b401a9397dfd94c88ec5e8d074ced3921a1f7836f3b38749427"
+}

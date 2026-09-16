@@ -1,0 +1,135 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    WITH combined AS (\n                        SELECT id, proposed_by, session_id, subject, grp,\n                               change_type, change_status,\n                               prev_starts_at, prev_duration, prev_classroom,\n                               new_starts_at, new_duration, new_classroom,\n                               proposed_at, NULL::timestamptz AS archived_at\n                        FROM changes\n                        WHERE change_status IN ('approved', 'rejected')\n                        UNION ALL\n                        SELECT id, proposed_by, session_id, subject, grp,\n                               change_type, change_status,\n                               prev_starts_at, prev_duration, prev_classroom,\n                               new_starts_at, new_duration, new_classroom,\n                               proposed_at, archived_at\n                        FROM changes_history\n                    )\n                    SELECT\n                        c.id AS \"id!\",\n                        c.proposed_by AS \"proposed_by!\",\n                        c.session_id,\n                        c.subject,\n                        c.grp,\n                        c.change_type AS \"change_type!: ChangeType\",\n                        c.change_status AS \"change_status!: ChangeStatus\",\n                        c.prev_starts_at,\n                        c.prev_duration,\n                        c.prev_classroom,\n                        c.new_starts_at,\n                        c.new_duration,\n                        c.new_classroom,\n                        c.proposed_at AS \"proposed_at!\",\n                        c.archived_at,\n                        u.email AS \"author_email!\"\n                    FROM combined c\n                    JOIN users u ON u.id = c.proposed_by\n                    ORDER BY COALESCE(c.archived_at, c.proposed_at) DESC\n                    OFFSET $1\n                    LIMIT $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "proposed_by!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "grp",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "change_type!: ChangeType",
+        "type_info": {
+          "Custom": {
+            "name": "change_type",
+            "kind": {
+              "Enum": [
+                "create",
+                "modify",
+                "delete"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "change_status!: ChangeStatus",
+        "type_info": {
+          "Custom": {
+            "name": "change_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "prev_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "prev_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "prev_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "new_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "new_duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "new_classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "proposed_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "author_email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "f88eb9eadd3596fa8342c6415badd519e61bac314a7021c28624b11d860532e9"
+}

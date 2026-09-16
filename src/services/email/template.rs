@@ -197,6 +197,77 @@ pub fn notification_email(subject: &str, message: &str) -> String {
     )
 }
 
+/// Escapa caracteres HTML especiales. Necesario para plantillas que interpolan
+/// texto libre escrito por usuarios no autenticados (formulario de contacto),
+/// a diferencia del resto de plantillas de este archivo que solo interpolan
+/// datos generados por el propio backend (tokens, URLs).
+fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+pub fn feedback_email(name: &str, from_email: &str, subject: &str, body: &str) -> String {
+    let name = escape_html(name);
+    let from_email = escape_html(from_email);
+    let subject = escape_html(subject);
+    let body = escape_html(body).replace('\n', "<br>");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{subject} – HorariosHub</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#0f172a;border-radius:12px 12px 0 0;padding:32px 40px;text-align:center;">
+              <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">HorariosHub</span>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="background-color:#ffffff;padding:48px 40px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:1px;">Formulario de contacto</p>
+              <h1 style="margin:0 0 20px;font-size:26px;font-weight:700;color:#0f172a;line-height:1.3;">{subject}</h1>
+              <p style="margin:0 0 24px;font-size:14px;color:#64748b;">
+                De: <strong style="color:#0f172a;">{name}</strong> &lt;<a href="mailto:{from_email}" style="color:#6366f1;text-decoration:none;">{from_email}</a>&gt;
+              </p>
+              <div style="font-size:15px;color:#475569;line-height:1.7;border-top:1px solid #f1f5f9;padding-top:24px;">
+                <p style="margin:0;">{body}</p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f8fafc;border-radius:0 0 12px 12px;padding:24px 40px;border:1px solid #e2e8f0;border-top:none;text-align:center;">
+              <p style="margin:0 0 4px;font-size:12px;color:#94a3b8;">&copy; 2026 HorariosHub. Todos los derechos reservados.</p>
+              <p style="margin:0;font-size:12px;color:#cbd5e1;">Este correo fue generado a partir del formulario de contacto de HorariosHub.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"#
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +311,40 @@ mod tests {
         assert!(html.contains("<html"));
         assert!(html.contains("</html>"));
         assert!(html.contains("<body"));
+    }
+
+    #[test]
+    fn feedback_email_contiene_los_datos_del_formulario() {
+        let html = feedback_email(
+            "Ana",
+            "ana@uniovi.es",
+            "Sugerencia sobre horarios",
+            "El horario de mates no se ve bien en móvil.",
+        );
+        assert!(html.contains("Ana"));
+        assert!(html.contains("ana@uniovi.es"));
+        assert!(html.contains("Sugerencia sobre horarios"));
+        assert!(html.contains("El horario de mates no se ve bien en móvil."));
+    }
+
+    #[test]
+    fn feedback_email_escapa_html_en_campos_de_usuario() {
+        let html = feedback_email(
+            "<script>alert(1)</script>",
+            "a@b.com",
+            "Asunto",
+            "cuerpo con <b>html</b> y \"comillas\"",
+        );
+        assert!(!html.contains("<script>alert(1)</script>"));
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(!html.contains("<b>html</b>"));
+        assert!(html.contains("&lt;b&gt;html&lt;/b&gt;"));
+        assert!(html.contains("&quot;comillas&quot;"));
+    }
+
+    #[test]
+    fn feedback_email_convierte_saltos_de_linea_en_br() {
+        let html = feedback_email("Ana", "ana@uniovi.es", "Asunto", "línea 1\nlínea 2");
+        assert!(html.contains("línea 1<br>línea 2"));
     }
 }

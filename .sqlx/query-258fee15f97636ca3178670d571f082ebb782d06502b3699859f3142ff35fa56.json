@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT (\n                        (SELECT COUNT(*) FROM changes WHERE change_status = $1)\n                        + (SELECT COUNT(*) FROM changes_history WHERE change_status = $1)\n                    )\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "change_status",
+            "kind": {
+              "Enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "258fee15f97636ca3178670d571f082ebb782d06502b3699859f3142ff35fa56"
+}

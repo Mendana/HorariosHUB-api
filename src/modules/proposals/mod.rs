@@ -17,7 +17,8 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/{id}/approve", patch(handlers::approve_proposal))
         .route("/{id}/reject", patch(handlers::reject_proposal))
-        .route("/mine", get(handlers::list_my_proposals));
+        .route("/mine", get(handlers::list_my_proposals))
+        .route("/history", get(handlers::list_history));
 
     Router::new().nest("/proposals", routes)
 }

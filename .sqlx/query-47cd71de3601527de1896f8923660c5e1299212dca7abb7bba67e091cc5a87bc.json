@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, title, description, subject, starts_at, duration_min, classroom,\n                recurrence_interval AS \"recurrence_interval: RecurrenceInterval\",\n                recurrence_end_date, created_by_email, created_at,\n                COUNT(*) OVER() AS \"total!\"\n            FROM events\n            WHERE\n                ($1::text IS NULL OR subject = $1)\n                AND ($2::text IS NULL OR title ILIKE '%' || $2 || '%')\n            ORDER BY starts_at ASC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "classroom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "recurrence_interval: RecurrenceInterval",
+        "type_info": {
+          "Custom": {
+            "name": "recurrence_interval",
+            "kind": {
+              "Enum": [
+                "daily",
+                "weekly",
+                "biweekly",
+                "monthly"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "recurrence_end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "total!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "47cd71de3601527de1896f8923660c5e1299212dca7abb7bba67e091cc5a87bc"
+}

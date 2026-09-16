@@ -188,6 +188,72 @@ pub struct ListMineProposalsQuery {
     pub limit: Option<u32>,
 }
 
+/// Filtro de estado para el histórico. A diferencia de `ProposalStatusFilter`,
+/// no incluye `Pending`: un cambio pendiente aún no ha pasado nada con él,
+/// así que no forma parte del histórico.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HistoryStatusFilter {
+    Approved,
+    Rejected,
+    All,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListHistoryQuery {
+    pub status: Option<HistoryStatusFilter>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListHistoryResponse {
+    pub data: Vec<HistoryChange>,
+    pub total: u32,
+    pub page: u32,
+    pub limit: u32,
+}
+
+/// Igual que `ResumedChange`, pero añade `archivedAt`: cuándo se archivó
+/// el cambio (huérfano o rechazado) tras una sincronización del scraper.
+/// Es `null` para cambios aprobados/rechazados que todavía están en la
+/// tabla `changes` (aún no han sido archivados).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryChange {
+    pub id: Uuid,
+    pub action: ChangeType,
+    pub class_id: Option<Uuid>,
+    pub old: ListOfModifications,
+    pub new: ListOfModifications,
+    pub status: ChangeStatus,
+    pub author: String,
+    pub created_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+/// Fila combinada de `changes` (aprobados/rechazados) y `changes_history`,
+/// con el email del autor ya resuelto (JOIN con users).
+pub struct ChangeHistoryRow {
+    pub id: Uuid,
+    pub proposed_by: Uuid,
+    pub session_id: Option<Uuid>,
+    pub subject: Option<String>,
+    pub grp: Option<String>,
+    pub change_type: ChangeType,
+    pub change_status: ChangeStatus,
+    pub prev_starts_at: Option<DateTime<Utc>>,
+    pub prev_duration: Option<i32>,
+    pub prev_classroom: Option<String>,
+    pub new_starts_at: Option<DateTime<Utc>>,
+    pub new_duration: Option<i32>,
+    pub new_classroom: Option<String>,
+    pub proposed_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub author_email: String,
+}
+
 #[derive(Debug, Clone, sqlx::Type, Deserialize, Serialize)]
 #[sqlx(type_name = "change_type", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]

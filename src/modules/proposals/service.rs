@@ -10,8 +10,9 @@ use crate::{
         },
         proposals::{
             models::{
-                ApproveProposalResponse, Change, ChangeStatus, ChangeType, ChangeWithAuthor,
-                CreateChangeInput, CreateProposalRequest, CreateProposalResponse,
+                ApproveProposalResponse, Change, ChangeHistoryRow, ChangeStatus, ChangeType,
+                ChangeWithAuthor, CreateChangeInput, CreateProposalRequest,
+                CreateProposalResponse, HistoryChange, HistoryStatusFilter, ListHistoryResponse,
                 ListOfModifications, ListProposalsResponse, ProposalStatusFilter,
                 RejectProposalResponse, ResumedChange,
             },
@@ -363,6 +364,35 @@ pub async fn list_my_proposals(
     })
 }
 
+#[tracing::instrument(skip(proposal_repo), fields(status = ?status, page = %page, limit = %limit))]
+pub async fn list_history(
+    proposal_repo: &dyn ProposalRepository,
+    status: Option<HistoryStatusFilter>,
+    page: u32,
+    limit: u32,
+) -> Result<ListHistoryResponse, AppError> {
+    let offset = (page - 1) * limit;
+
+    let status_filter = match status {
+        None | Some(HistoryStatusFilter::All) => None,
+        Some(HistoryStatusFilter::Approved) => Some(ChangeStatus::Approved),
+        Some(HistoryStatusFilter::Rejected) => Some(ChangeStatus::Rejected),
+    };
+
+    let (rows, total) = proposal_repo
+        .list_history(status_filter, offset, limit)
+        .await?;
+
+    let data = rows.into_iter().map(change_history_to_resumed).collect();
+
+    Ok(ListHistoryResponse {
+        data,
+        total,
+        page,
+        limit,
+    })
+}
+
 /// Convierte un `ChangeWithAuthor` a un `ResumedChange`, que es la forma en la que se devuelve en la lista de propuestas.
 fn change_to_resumed(c: ChangeWithAuthor) -> ResumedChange {
     ResumedChange {
@@ -386,5 +416,33 @@ fn change_to_resumed(c: ChangeWithAuthor) -> ResumedChange {
         status: c.change_status,
         author: c.author_email,
         created_at: c.proposed_at,
+    }
+}
+
+/// Convierte una `ChangeHistoryRow` (fila combinada de `changes` + `changes_history`)
+/// a un `HistoryChange`, la forma en la que se devuelve en el histórico.
+fn change_history_to_resumed(c: ChangeHistoryRow) -> HistoryChange {
+    HistoryChange {
+        id: c.id,
+        action: c.change_type,
+        class_id: c.session_id,
+        old: ListOfModifications {
+            subject: None,
+            grp: None,
+            starts_at: c.prev_starts_at,
+            duration: c.prev_duration,
+            classroom: c.prev_classroom,
+        },
+        new: ListOfModifications {
+            subject: c.subject,
+            grp: c.grp,
+            starts_at: c.new_starts_at,
+            duration: c.new_duration,
+            classroom: c.new_classroom,
+        },
+        status: c.change_status,
+        author: c.author_email,
+        created_at: c.proposed_at,
+        archived_at: c.archived_at,
     }
 }

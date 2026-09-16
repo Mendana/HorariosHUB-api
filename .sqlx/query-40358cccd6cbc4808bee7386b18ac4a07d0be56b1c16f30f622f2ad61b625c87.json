@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT (\n                        (SELECT COUNT(*) FROM changes WHERE change_status IN ('approved', 'rejected'))\n                        + (SELECT COUNT(*) FROM changes_history)\n                    )\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "40358cccd6cbc4808bee7386b18ac4a07d0be56b1c16f30f622f2ad61b625c87"
+}
