@@ -187,6 +187,7 @@ pub async fn login(
     let user_role = user.role.clone();
     let response = LoginResponse {
         user: UserPublic {
+            id: user.id,
             email: user.email,
             role: user.role,
         },

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
 pub struct UserPublic {
+    pub id: Uuid,
     pub email: String,
     pub role: UserRole,
 }

@@ -78,7 +78,7 @@ async fn get_users_respuesta_tiene_campo_users_array() {
 }
 
 #[tokio::test]
-async fn get_users_cada_usuario_tiene_email_y_role() {
+async fn get_users_cada_usuario_tiene_id_email_y_role() {
     let ctx = setup().await;
     let token = login_as(&ctx, "prof_fields@uniovi.es", "professor").await;
 
@@ -99,6 +99,14 @@ async fn get_users_cada_usuario_tiene_email_y_role() {
 
     for user in users {
         assert!(
+            user["id"].is_string(),
+            "cada usuario debe tener campo 'id'"
+        );
+        assert!(
+            uuid::Uuid::parse_str(user["id"].as_str().unwrap()).is_ok(),
+            "'id' debe ser un UUID válido"
+        );
+        assert!(
             user["email"].is_string(),
             "cada usuario debe tener campo 'email'"
         );
@@ -107,6 +115,35 @@ async fn get_users_cada_usuario_tiene_email_y_role() {
             "cada usuario debe tener campo 'role'"
         );
     }
+}
+
+#[tokio::test]
+async fn get_users_id_puede_usarse_para_cambiar_el_role() {
+    let ctx = setup().await;
+    let admin_token = login_as(&ctx, "admin_id_roundtrip@uniovi.es", "admin").await;
+    login_as(&ctx, "student_id_roundtrip@uniovi.es", "student").await;
+
+    let response = ctx
+        .server
+        .get("/users")
+        .add_header("Authorization", format!("Bearer {admin_token}"))
+        .await;
+    let body: serde_json::Value = response.json();
+    let users = body["users"].as_array().unwrap();
+
+    let target = users
+        .iter()
+        .find(|u| u["email"] == "student_id_roundtrip@uniovi.es")
+        .expect("el estudiante recién creado debe aparecer en la lista");
+    let id = target["id"].as_str().unwrap();
+
+    let response = ctx
+        .server
+        .patch(&format!("/users/{id}/change/professor"))
+        .add_header("Authorization", format!("Bearer {admin_token}"))
+        .await;
+
+    response.assert_status(StatusCode::OK);
 }
 
 #[tokio::test]
