@@ -25,6 +25,7 @@ pub async fn get_all_users(repo: &dyn UserRepository) -> Result<Vec<UserPublic>,
     let users_public: Vec<UserPublic> = users
         .into_iter()
         .map(|user| UserPublic {
+            id: user.id,
             email: user.email,
             role: user.role,
         })
